@@ -112,19 +112,34 @@ export default function StockInPage() {
         .select("*")
 
       if (doData && detailsData && itemsData) {
-        const merged = detailsData.map((det: any) => {
+        const groupedMap = new Map<string, any>()
+
+        for (const det of detailsData) {
+          if (det.item_id !== record.item_id) continue
+
           const doRecord = doData.find((d: any) => d.id === det.delivery_order_id)
+          if (!doRecord) continue
+
+          const key = `${det.delivery_order_id}-${det.item_id}`
           const item = itemsData.find((i: any) => i.id === det.item_id)
-          return {
-            ...det,
-            do_number: doRecord?.do_number ?? "-",
-            po_number: doRecord?.po_number ?? "-",
-            status: doRecord?.status ?? "draft",
-            created_at: doRecord?.created_at ?? det.created_at,
-            items: item ?? null,
+
+          if (!groupedMap.has(key)) {
+            groupedMap.set(key, {
+              id: `${det.delivery_order_id}-${det.id}`,
+              qty: det.qty,
+              do_number: doRecord?.do_number ?? "-",
+              po_number: doRecord?.po_number ?? "-",
+              status: doRecord?.status ?? "draft",
+              created_at: doRecord?.created_at ?? det.created_at,
+              items: item ?? null,
+            })
+          } else {
+            const existing = groupedMap.get(key)
+            existing.qty += det.qty
           }
-        })
-        setDoHistory(merged)
+        }
+
+        setDoHistory(Array.from(groupedMap.values()))
       }
     }
 
@@ -198,6 +213,28 @@ export default function StockInPage() {
 
     setLoading(true)
     const qtyNum = parseInt(qty)
+    const normalizedNote = note.trim() || null
+
+    if (!editRecord) {
+      const duplicateExists = records.some((record) => {
+        const sameDay =
+          new Date(record.created_at).toDateString() === new Date().toDateString()
+        const sameNote = (record.note || "") === (normalizedNote || "")
+
+        return (
+          record.item_id === selectedItem &&
+          record.qty === qtyNum &&
+          sameNote &&
+          sameDay
+        )
+      })
+
+      if (duplicateExists) {
+        toast.error("Data dengan item, qty, dan keterangan yang sama sudah ada")
+        setLoading(false)
+        return
+      }
+    }
 
     if (editRecord) {
       const oldQty = editRecord.qty
@@ -206,7 +243,7 @@ export default function StockInPage() {
         .from("stock_in")
         .update({
           qty: qtyNum,
-          note: note.trim() || null,
+          note: normalizedNote,
         })
         .eq("id", editRecord.id)
 
@@ -237,7 +274,7 @@ export default function StockInPage() {
         .insert({
           item_id: selectedItem,
           qty: qtyNum,
-          note: note.trim() || null,
+          note: normalizedNote,
           created_by: user?.id,
         })
         .select()
@@ -314,14 +351,14 @@ export default function StockInPage() {
       cell: ({ row }) => row.original.items?.current_stock ?? "-",
     },
     {
+      accessorKey: "note",
+      header: "Keterangan",
+    },
+    {
       accessorKey: "created_at",
       header: "Tanggal",
       cell: ({ row }) =>
         new Date(row.original.created_at).toLocaleString("id-ID"),
-    },
-    {
-      accessorKey: "note",
-      header: "Keterangan",
     },
   ]
 

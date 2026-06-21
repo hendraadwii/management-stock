@@ -161,10 +161,6 @@ export default function ItemsPage() {
       cell: ({ row }) => row.original.rack ?? "-",
     },
     {
-      accessorKey: "current_stock",
-      header: "Current Stock",
-    },
-    {
       id: "actions",
       cell: ({ row }) => (
         <div className="flex items-center gap-2">

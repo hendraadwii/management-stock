@@ -12,7 +12,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Warehouse } from "lucide-react"
 import { toast } from "sonner"
 import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
@@ -50,27 +49,23 @@ export default function LoginPage() {
     })
 
     toast.success("Login berhasil")
-    router.push("/dashboard")
+    router.push(user.role === "user" ? "/history" : "/dashboard")
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1 text-center">
-          <div className="flex justify-center mb-2">
-            <div className="rounded-full bg-primary/10 p-3">
-              <Warehouse className="h-8 w-8 text-primary" />
-            </div>
-          </div>
-          <CardTitle className="text-xl">Stock Management</CardTitle>
-          <CardDescription>Silakan login untuk melanjutkan</CardDescription>
+    <div className="flex min-h-screen items-center justify-center bg-muted/30 px-3 py-6 sm:px-4">
+      <Card className="w-full max-w-sm shadow-sm sm:max-w-md">
+        <CardHeader className="space-y-2 px-5 pb-4 pt-6 text-center sm:px-6">
+          <CardTitle className="text-2xl font-semibold tracking-tight">Stock Management</CardTitle>
+          <CardDescription className="text-sm">Silakan login untuk melanjutkan</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-5 pb-6 sm:px-6">
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="username">Username</Label>
               <Input
                 id="username"
+                className="h-11"
                 placeholder="Masukkan username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
@@ -81,6 +76,7 @@ export default function LoginPage() {
               <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
+                className="h-11"
                 type="password"
                 placeholder="Masukkan password"
                 value={password}
@@ -88,7 +84,7 @@ export default function LoginPage() {
                 required
               />
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="h-11 w-full" disabled={loading}>
               {loading ? "Loading..." : "Login"}
             </Button>
           </form>

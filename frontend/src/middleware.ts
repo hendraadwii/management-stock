@@ -10,15 +10,22 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (authCookie && pathname === "/login") {
-    const url = request.nextUrl.clone()
-    url.pathname = "/dashboard"
-    return NextResponse.redirect(url)
-  }
-
   if (authCookie) {
     try {
-      JSON.parse(atob(authCookie))
+      const authData = JSON.parse(atob(authCookie))
+      const isUser = authData.role === "user"
+
+      if (pathname === "/login") {
+        const url = request.nextUrl.clone()
+        url.pathname = isUser ? "/history" : "/dashboard"
+        return NextResponse.redirect(url)
+      }
+
+      if (isUser && pathname !== "/history" && pathname !== "/") {
+        const url = request.nextUrl.clone()
+        url.pathname = "/history"
+        return NextResponse.redirect(url)
+      }
     } catch {
       const url = request.nextUrl.clone()
       url.pathname = "/login"

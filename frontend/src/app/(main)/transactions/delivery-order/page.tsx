@@ -445,7 +445,10 @@ export default function DeliveryOrderPage() {
 
       for (let c = 1; c <= 4; c++) {
         const cell = row.getCell(c)
-        const alignment =
+        const alignment:
+          | { horizontal: "center" }
+          | { horizontal: "right" }
+          | { horizontal: "left" } =
           c === 1
             ? { horizontal: "center" }
             : c === 4
@@ -471,10 +474,10 @@ export default function DeliveryOrderPage() {
     signatureLineCell.value = ""
     signatureLineCell.alignment = { horizontal: "left", vertical: "middle" }
     signatureLineCell.border = {
-      top: { style: "none" },
+      top: {},
       bottom: { style: "thin" },
-      left: { style: "none" },
-      right: { style: "none" },
+      left: {},
+      right: {},
     }
 
     const buffer = await workbook.xlsx.writeBuffer()
