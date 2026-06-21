@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, Fragment } from "react"
+import { useEffect, useState, Fragment, useMemo } from "react"
 import { createClient } from "@/lib/supabase"
 import { Menu } from "@/types"
 import { Button } from "@/components/ui/button"
@@ -48,7 +48,7 @@ export default function MenusPage() {
   const [icon, setIcon] = useState("")
   const [parentId, setParentId] = useState("")
   const [sortOrder, setSortOrder] = useState("0")
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   const fetchMenus = async () => {
     const { data } = await supabase
@@ -63,7 +63,7 @@ export default function MenusPage() {
 
   useEffect(() => {
     fetchMenus()
-  }, [supabase])
+  }, [])
 
   const topMenus = menus.filter((m) => !m.parent_id)
   const getChildren = (parentId: string) =>
@@ -150,7 +150,7 @@ export default function MenusPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Master Menu</h1>
           <p className="text-sm text-muted-foreground">
@@ -245,8 +245,8 @@ export default function MenusPage() {
         </Dialog>
       </div>
 
-      <div className="rounded-md border">
-        <Table>
+      <div className="rounded-md border overflow-x-auto">
+        <Table className="min-w-[600px]">
           <TableHeader>
             <TableRow>
               <TableHead className="w-8"></TableHead>

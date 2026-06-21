@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { createClient } from "@/lib/supabase"
 import { Item } from "@/types"
 import { DataTable } from "@/components/data-table"
@@ -28,7 +28,7 @@ export default function ItemsPage() {
   const [partNumber, setPartNumber] = useState("")
   const [category, setCategory] = useState("")
   const [rack, setRack] = useState("")
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   const fetchItems = async () => {
     const { data } = await supabase
@@ -43,7 +43,7 @@ export default function ItemsPage() {
 
   useEffect(() => {
     fetchItems()
-  }, [supabase])
+  }, [])
 
   const resetForm = () => {
     setPartNumber("")
@@ -189,7 +189,7 @@ export default function ItemsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
             Master Item

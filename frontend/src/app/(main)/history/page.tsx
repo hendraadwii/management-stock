@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { createClient } from "@/lib/supabase"
 import { Badge } from "@/components/ui/badge"
 
@@ -22,7 +22,7 @@ interface Movement {
 
 export default function HistoryPage() {
   const [movements, setMovements] = useState<Movement[]>([])
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -91,7 +91,7 @@ export default function HistoryPage() {
     }
 
     fetchData()
-  }, [supabase])
+  }, [])
 
   const columns: ColumnDef<Movement>[] = [
     {
@@ -175,13 +175,13 @@ export default function HistoryPage() {
           Riwayat barang masuk (Stock In) dan barang keluar (Delivery Order)
         </p>
       </div>
-      <div className="flex items-center gap-4 text-sm">
+      <div className="flex flex-wrap items-center gap-4 text-sm">
         <div className="flex items-center gap-1.5">
-          <span className="inline-block h-3 w-3 rounded-full bg-green-500" />
+          <span className="inline-block h-3 w-3 shrink-0 rounded-full bg-green-500" />
           <span className="text-muted-foreground">Submit / Stock Masuk</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="inline-block h-3 w-3 rounded-full bg-yellow-500" />
+          <span className="inline-block h-3 w-3 shrink-0 rounded-full bg-yellow-500" />
           <span className="text-muted-foreground">Draft</span>
         </div>
       </div>

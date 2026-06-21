@@ -9,7 +9,7 @@ import { LogOut, Menu, Warehouse, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { createClient } from "@/lib/supabase"
 import { Menu as MenuType } from "@/types"
@@ -23,12 +23,12 @@ function SidebarContent({
 }) {
   const pathname = usePathname()
   const [menus, setMenus] = useState<MenuType[]>([])
-  const supabase = createClient()
+  const supabase = useCallback(() => createClient(), [])
 
   useEffect(() => {
+    const client = supabase()
     const fetchMenus = async () => {
-      // 1. Ambil semua menu
-      const { data: allMenus } = await supabase
+      const { data: allMenus } = await client
         .from("mst_menus")
         .select("*")
         .order("sort_order")
@@ -36,20 +36,17 @@ function SidebarContent({
 
       if (!allMenus) return
 
-      // 2. Jika tidak ada user/role, kosongkan
       if (!user?.role) {
         setMenus([])
         return
       }
 
-      // Jika role adalah admin, selalu tampilkan semua menu
       if (user.role.toLowerCase() === "admin") {
         setMenus(allMenus)
         return
       }
 
-      // 3. Ambil access_menus dari role
-      const { data: roleData } = await supabase
+      const { data: roleData } = await client
         .from("mst_roles")
         .select("name, access_menus")
         .eq("name", user.role)
@@ -60,7 +57,6 @@ function SidebarContent({
       if (allowedIdsArray.length > 0) {
         const allowedIds = new Set(allowedIdsArray)
         
-        // Otomatis tambahkan parent_id jika anak menu diizinkan agar kategoringya muncul di sidebar
         const parentIdsToAdd = new Set<string>()
         allMenus.forEach((m) => {
           if (allowedIds.has(m.id) && m.parent_id) {
@@ -72,7 +68,6 @@ function SidebarContent({
         const filtered = allMenus.filter((m) => finalAllowedIds.has(m.id))
         setMenus(filtered)
       } else {
-        // Jika belum memiliki hak akses, kosongkan menu
         setMenus([])
       }
     }
@@ -172,7 +167,7 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className="hidden w-64 border-r bg-card md:block">
+      <aside className="hidden w-64 shrink-0 border-r bg-card md:block">
         <SidebarContent user={user} signOut={signOut} />
       </aside>
       <Sheet open={open} onOpenChange={setOpen}>
@@ -181,7 +176,10 @@ export function Sidebar() {
             <Button
               variant="ghost"
               size="icon"
-              className="fixed left-4 top-3 z-50 md:hidden"
+              className={cn(
+                "fixed left-4 top-3 z-[100] md:hidden shadow-md transition-opacity",
+                open && "opacity-0 pointer-events-none"
+              )}
             />
           }
         >

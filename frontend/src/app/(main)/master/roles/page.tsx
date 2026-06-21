@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { createClient } from "@/lib/supabase"
 import { RoleRecord as Role, Menu } from "@/types"
 import { DataTable } from "@/components/data-table"
@@ -28,7 +28,7 @@ export default function RolesPage() {
   const [editItem, setEditItem] = useState<Role | null>(null)
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   // State untuk Hak Akses Menu
   const [accessDialogOpen, setAccessDialogOpen] = useState(false)
@@ -103,7 +103,7 @@ export default function RolesPage() {
 
   useEffect(() => {
     fetchRoles()
-  }, [supabase])
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -210,7 +210,7 @@ export default function RolesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Master Role</h1>
           <p className="text-sm text-muted-foreground">

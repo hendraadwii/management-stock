@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
 import { Item, DeliveryOrder, DeliveryOrderDetail } from "@/types"
@@ -71,7 +71,7 @@ export default function DeliveryOrderPage() {
   const [formItems, setFormItems] = useState<DOFormItem[]>([])
   const [loading, setLoading] = useState(false)
   const { user } = useAuth()
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   const fetchData = async () => {
     const { data: itemsData } = await supabase
@@ -108,7 +108,7 @@ export default function DeliveryOrderPage() {
 
   useEffect(() => {
     fetchData()
-  }, [supabase])
+  }, [])
 
   const addItem = () => {
     if (!selectedItem || !qty || parseInt(qty) <= 0) {
@@ -350,70 +350,62 @@ export default function DeliveryOrderPage() {
     const details = doDetail.delivery_order_details || []
 
     const rawData = [
-      ["NO PO", doRecord.po_number, "", ""],
-      ["NO DO", doRecord.do_number, "", ""],
+      ["No PO", doRecord.po_number, "", ""],
+      ["No DO", doRecord.do_number, "", ""],
       ["Shipping", doRecord.shipping, "", ""],
       ["Date", new Date(doRecord.created_at).toLocaleDateString("id-ID"), "", ""],
       ["", "", "", ""],
-      ["No", "Category", "Part Number", "QTY Out"],
+      ["No", "Category", "Part Number", "Qty Out"],
       ...details.map((d: any, i: number) => [
-        i + 1,
+        String(i + 1),
         d.items?.category ?? "-",
         d.items?.part_number ?? "-",
         d.qty,
       ]),
-      ["", "", "", ""],
-      ["", "", "", "Mengetahui,"],
-      ["", "", "", `( ${" ".repeat(20)} )`],
     ]
 
     const ws = XLSX.utils.aoa_to_sheet(rawData)
-    const maxRow = rawData.length - 1
-    const maxCol = 3
     const thin = { style: "thin" }
     const allBorder = { top: thin, bottom: thin, left: thin, right: thin }
 
-    ws["!ref"] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: maxRow, c: maxCol } })
-
+    const maxRow = rawData.length - 1
     for (let r = 0; r <= maxRow; r++) {
-      for (let c = 0; c <= maxCol; c++) {
+      for (let c = 0; c <= 3; c++) {
         const addr = XLSX.utils.encode_cell({ r, c })
         if (!ws[addr]) ws[addr] = { t: "s", v: "" }
-        ws[addr].s = { ...ws[addr].s, border: allBorder }
       }
     }
 
-    for (let c = 0; c <= maxCol; c++) {
-      const addr = XLSX.utils.encode_cell({ r: 0, c })
-      ws[addr].s = { ...ws[addr].s, font: { bold: true } }
+    const tblStart = 5
+    for (let c = 0; c <= 3; c++) {
+      const addr = XLSX.utils.encode_cell({ r: tblStart, c })
+      ws[addr].s = {
+        font: { bold: true, sz: 11 },
+        fill: { fgColor: { rgb: "F3F4F6" } },
+        alignment: { horizontal: "center", vertical: "center" },
+        border: allBorder,
+      }
     }
 
-    for (let r = 0; r <= 3; r++) {
-      const addr = XLSX.utils.encode_cell({ r, c: 0 })
-      ws[addr].s = { ...ws[addr].s, font: { bold: true } }
-    }
-
-    const headerRow = 5
-    for (let c = 0; c <= maxCol; c++) {
-      const addr = XLSX.utils.encode_cell({ r: headerRow, c })
-      ws[addr].s = { ...ws[addr].s, font: { bold: true }, alignment: { horizontal: "center", vertical: "center" } }
-    }
-
-    for (let r = 0; r <= maxRow; r++) {
-      const addr = XLSX.utils.encode_cell({ r, c: 0 })
-      ws[addr].s = { ...ws[addr].s, alignment: { horizontal: "center", vertical: "center" } }
-    }
-
-    for (let r = 6; r <= maxRow; r++) {
-      const addr = XLSX.utils.encode_cell({ r, c: 3 })
-      ws[addr].s = { ...ws[addr].s, alignment: { horizontal: "center", vertical: "center" } }
+    for (let r = tblStart + 1; r <= maxRow; r++) {
+      for (let c = 0; c <= 3; c++) {
+        const addr = XLSX.utils.encode_cell({ r, c })
+        let hal = "left"
+        if (c === 0) hal = "center"
+        if (c === 3) hal = "right"
+        ws[addr].s = {
+          font: { sz: 11 },
+          alignment: { horizontal: hal, vertical: "center" },
+          border: allBorder,
+        }
+      }
     }
 
     ws["!cols"] = [
-      { wch: 12 },
+      { wch: 8 },
       { wch: 25 },
-      { wch: 30 },
-      { wch: 30 },
+      { wch: 35 },
+      { wch: 15 },
     ]
 
     ws["!print"] = {
@@ -427,8 +419,8 @@ export default function DeliveryOrderPage() {
         right: 0.7,
         top: 0.7,
         bottom: 0.7,
-        header: 0.3,
-        footer: 0.3,
+        header: 0,
+        footer: 0,
       },
     }
 
@@ -687,7 +679,7 @@ export default function DeliveryOrderPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
             Delivery Order
@@ -696,7 +688,7 @@ export default function DeliveryOrderPage() {
             Kelola Delivery Order untuk pengeluaran barang
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button onClick={openNewDialog}>
             <Plus className="mr-2 h-4 w-4" />
             New Data

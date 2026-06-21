@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
 import { Item } from "@/types"
@@ -61,7 +61,7 @@ export default function StockInPage() {
   const [note, setNote] = useState("")
   const [loading, setLoading] = useState(false)
   const { user } = useAuth()
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   const fetchData = async () => {
     const { data: itemsData } = await supabase
@@ -87,7 +87,7 @@ export default function StockInPage() {
 
   useEffect(() => {
     fetchData()
-  }, [supabase])
+  }, [])
 
   useEffect(() => {
     if (!selectedId) {
@@ -129,7 +129,7 @@ export default function StockInPage() {
     }
 
     fetchDoHistory()
-  }, [selectedId, records, supabase])
+  }, [selectedId, records])
 
   const openNewDialog = () => {
     setEditRecord(null)
@@ -327,7 +327,7 @@ export default function StockInPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
             Stock Masuk
@@ -336,7 +336,7 @@ export default function StockInPage() {
             Catat barang masuk ke gudang
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button onClick={openNewDialog}>
             <Plus className="mr-2 h-4 w-4" />
             New Data

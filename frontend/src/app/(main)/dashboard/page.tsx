@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { createClient } from "@/lib/supabase"
 import {
   Card,
@@ -14,7 +14,7 @@ export default function DashboardPage() {
   const [totalItems, setTotalItems] = useState(0)
   const [totalStock, setTotalStock] = useState(0)
   const [totalDO, setTotalDO] = useState(0)
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -45,7 +45,7 @@ export default function DashboardPage() {
     }
 
     fetchData()
-  }, [supabase])
+  }, [])
 
   return (
     <div className="space-y-6">

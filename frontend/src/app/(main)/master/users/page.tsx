@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { createClient } from "@/lib/supabase"
 import { User, RoleRecord } from "@/types"
 import { DataTable } from "@/components/data-table"
@@ -35,7 +35,7 @@ export default function UsersPage() {
   const [password, setPassword] = useState("")
   const [role, setRole] = useState("")
   const [allRoles, setAllRoles] = useState<RoleRecord[]>([])
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   const fetchUsers = async () => {
     const { data } = await supabase.from("mst_users").select("*").order("username")
@@ -53,7 +53,7 @@ export default function UsersPage() {
   useEffect(() => {
     fetchUsers()
     fetchRoles()
-  }, [supabase])
+  }, [])
 
   const resetForm = () => {
     setUsername("")
@@ -204,7 +204,7 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
             Master User
