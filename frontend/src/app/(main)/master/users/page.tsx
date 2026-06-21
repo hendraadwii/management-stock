@@ -8,7 +8,13 @@ import { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -27,32 +33,20 @@ export default function UsersPage() {
   const [editItem, setEditItem] = useState<User | null>(null)
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
-  const [selectedRoles, setSelectedRoles] = useState<string[]>([])
+  const [role, setRole] = useState("")
   const [allRoles, setAllRoles] = useState<RoleRecord[]>([])
   const supabase = createClient()
 
   const fetchUsers = async () => {
-    const { data } = await supabase.from("users").select("*").order("username")
+    const { data } = await supabase.from("mst_users").select("*").order("username")
     if (data) {
-      const usersWithRoles = await Promise.all(
-        data.map(async (u) => {
-          const { data: roleRecords } = await supabase
-            .from("user_roles")
-            .select("role_name")
-            .eq("user_id", u.id)
-          return {
-            ...u,
-            roles: roleRecords?.map(r => r.role_name) || [u.role],
-          } as User
-        })
-      )
-      setUsers(usersWithRoles)
+      setUsers(data)
     }
     setLoading(false)
   }
 
   const fetchRoles = async () => {
-    const { data } = await supabase.from("roles").select("*").order("name")
+    const { data } = await supabase.from("mst_roles").select("*").order("name")
     if (data) setAllRoles(data)
   }
 
@@ -64,7 +58,7 @@ export default function UsersPage() {
   const resetForm = () => {
     setUsername("")
     setPassword("")
-    setSelectedRoles([])
+    setRole("")
     setEditItem(null)
   }
 
@@ -79,35 +73,20 @@ export default function UsersPage() {
     if (editItem) {
       const payload: Record<string, string> = {
         username: username.trim(),
-        role: selectedRoles[0] || "user",
+        role: role || "user",
       }
       if (password.trim()) {
         payload.password = password.trim()
       }
 
       const { error } = await supabase
-        .from("users")
+        .from("mst_users")
         .update(payload)
         .eq("id", editItem.id)
 
       if (error) {
         toast.error("Gagal mengupdate user")
         return
-      }
-
-      await supabase.from("user_roles").delete().eq("user_id", editItem.id)
-
-      if (selectedRoles.length > 0) {
-        const { error: roleError } = await supabase.from("user_roles").insert(
-          selectedRoles.map((r) => ({
-            user_id: editItem.id,
-            role_name: r,
-          }))
-        )
-        if (roleError) {
-          toast.error("Gagal menyimpan role user")
-          return
-        }
       }
 
       toast.success("User berhasil diupdate")
@@ -118,7 +97,7 @@ export default function UsersPage() {
       }
 
       const { data: existingUser } = await supabase
-        .from("users")
+        .from("mst_users")
         .select("id")
         .eq("username", username.trim())
         .limit(1)
@@ -129,11 +108,11 @@ export default function UsersPage() {
       }
 
       const { data: newUser, error } = await supabase
-        .from("users")
+        .from("mst_users")
         .insert({
           username: username.trim(),
           password: password.trim(),
-          role: selectedRoles[0] || "user",
+          role: role || "user",
         })
         .select()
         .single()
@@ -141,19 +120,6 @@ export default function UsersPage() {
       if (error || !newUser) {
         toast.error("Gagal membuat user")
         return
-      }
-
-      if (selectedRoles.length > 0) {
-        const { error: roleError } = await supabase.from("user_roles").insert(
-          selectedRoles.map((r) => ({
-            user_id: newUser.id,
-            role_name: r,
-          }))
-        )
-        if (roleError) {
-          toast.error("Gagal menyimpan role user")
-          return
-        }
       }
 
       toast.success("User berhasil dibuat")
@@ -165,15 +131,17 @@ export default function UsersPage() {
   }
 
   const handleEdit = async (item: User) => {
+    if (!confirm("Yakin ingin mengedit user ini?")) return
     setEditItem(item)
     setUsername(item.username)
     setPassword("")
-    setSelectedRoles(item.roles || [item.role])
+    setRole(item.role)
     setOpen(true)
   }
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase.from("users").delete().eq("id", id)
+    if (!confirm("Yakin ingin menghapus user ini?")) return
+    const { error } = await supabase.from("mst_users").delete().eq("id", id)
 
     if (error) {
       toast.error("Gagal menghapus user")
@@ -181,14 +149,6 @@ export default function UsersPage() {
     }
     toast.success("User berhasil dihapus")
     fetchUsers()
-  }
-
-  const toggleRole = (roleName: string) => {
-    setSelectedRoles((prev) =>
-      prev.includes(roleName)
-        ? prev.filter((r) => r !== roleName)
-        : [...prev, roleName]
-    )
   }
 
   const columns: ColumnDef<User>[] = [
@@ -200,22 +160,17 @@ export default function UsersPage() {
       id: "roles",
       header: "Role",
       cell: ({ row }) => (
-        <div className="flex flex-wrap gap-1">
-          {(row.original.roles || [row.original.role]).map((r) => (
-            <Badge
-              key={r}
-              variant={r === "admin" ? "default" : "secondary"}
-              className="capitalize"
-            >
-              {r === "admin" ? (
-                <Shield className="mr-1 h-3 w-3" />
-              ) : (
-                <UserIcon className="mr-1 h-3 w-3" />
-              )}
-              {r}
-            </Badge>
-          ))}
-        </div>
+        <Badge
+          variant={row.original.role === "admin" ? "default" : "secondary"}
+          className="capitalize"
+        >
+          {row.original.role === "admin" ? (
+            <Shield className="mr-1 h-3 w-3" />
+          ) : (
+            <UserIcon className="mr-1 h-3 w-3" />
+          )}
+          {row.original.role}
+        </Badge>
       ),
     },
     {
@@ -304,29 +259,27 @@ export default function UsersPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Role</Label>
-                <div className="space-y-2 rounded-md border p-3">
-                  {allRoles.length === 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      Belum ada role. Tambah role di Master Role terlebih dahulu.
-                    </p>
-                  )}
-                  {allRoles.map((r) => (
-                    <Label
-                      key={r.id}
-                      className="flex items-center gap-2 text-sm font-normal"
-                    >
-                      <Checkbox
-                        checked={selectedRoles.includes(r.name)}
-                        onCheckedChange={() => toggleRole(r.name)}
-                      />
-                      {r.name}
-                      {r.name === "admin" && (
-                        <Shield className="h-3 w-3 text-primary" />
-                      )}
-                    </Label>
-                  ))}
-                </div>
+                <Label htmlFor="role">Role</Label>
+                <Select value={role} onValueChange={(v) => v && setRole(v)}>
+                  <SelectTrigger id="role">
+                    <SelectValue placeholder="Pilih role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allRoles.length === 0 && (
+                      <SelectItem value="" disabled>
+                        Belum ada role
+                      </SelectItem>
+                    )}
+                    {allRoles.map((r) => (
+                      <SelectItem key={r.id} value={r.name}>
+                        <span className="flex items-center gap-2">
+                          {r.name === "admin" && <Shield className="h-3 w-3 text-primary" />}
+                          {r.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <Button type="submit" className="w-full">
                 {editItem ? "Update" : "Simpan"}

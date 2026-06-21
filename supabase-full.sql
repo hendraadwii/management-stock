@@ -36,18 +36,33 @@ BEGIN
 END $$;
 
 -- ============================================================
--- 3. CREATE TABLES (IF NOT EXISTS)
+-- 3. DROP TABLES YANG TIDAK DIGUNAKAN LAGI
+-- ============================================================
+DROP TABLE IF EXISTS user_roles CASCADE;
+DROP TABLE IF EXISTS racks CASCADE;
+DROP TABLE IF EXISTS categories CASCADE;
+
+-- ============================================================
+-- 4. ALTER ITEMS (hapus kolom lama, tambah kolom baru)
+-- ============================================================
+ALTER TABLE items DROP COLUMN IF EXISTS item_name;
+ALTER TABLE items DROP COLUMN IF EXISTS category_id;
+ALTER TABLE items DROP COLUMN IF EXISTS rack_id;
+ALTER TABLE items ADD COLUMN IF NOT EXISTS category TEXT;
+ALTER TABLE items ADD COLUMN IF NOT EXISTS rack TEXT;
+
+-- ============================================================
+-- 5. CREATE TABLES (IF NOT EXISTS)
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   username VARCHAR(100) UNIQUE NOT NULL,
   password VARCHAR(255) NOT NULL DEFAULT 'admin',
-  role VARCHAR(10) NOT NULL CHECK (role IN ('admin', 'user')) DEFAULT 'user',
+  role VARCHAR(10) NOT NULL DEFAULT 'user',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Pastikan kolom id memiliki default gen_random_uuid() dan tidak terikat auth.users jika tabel sudah ada sebelumnya
 ALTER TABLE users ALTER COLUMN id SET DEFAULT gen_random_uuid();
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_id_fkey;
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
@@ -58,14 +73,6 @@ CREATE TABLE IF NOT EXISTS roles (
   description TEXT,
   access_menus UUID[] DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS user_roles (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  role_name VARCHAR(50) NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(user_id, role_name)
 );
 
 CREATE TABLE IF NOT EXISTS menus (
@@ -79,25 +86,11 @@ CREATE TABLE IF NOT EXISTS menus (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS categories (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name VARCHAR(200) NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS racks (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  rack_code VARCHAR(50) UNIQUE NOT NULL,
-  description TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
 CREATE TABLE IF NOT EXISTS items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   part_number VARCHAR(100) UNIQUE NOT NULL,
-  item_name VARCHAR(200) NOT NULL,
-  category_id UUID NOT NULL REFERENCES categories(id) ON DELETE RESTRICT,
-  rack_id UUID NOT NULL REFERENCES racks(id) ON DELETE RESTRICT,
+  category TEXT,
+  rack TEXT,
   current_stock INTEGER NOT NULL DEFAULT 0 CHECK (current_stock >= 0),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -137,10 +130,8 @@ CREATE TABLE IF NOT EXISTS stock_movements (
 );
 
 -- ============================================================
--- 4. INDEXES (IF NOT EXISTS aman dijalankan ulang)
+-- 6. INDEXES
 -- ============================================================
-CREATE INDEX IF NOT EXISTS idx_items_category ON items(category_id);
-CREATE INDEX IF NOT EXISTS idx_items_rack ON items(rack_id);
 CREATE INDEX IF NOT EXISTS idx_stock_in_item ON stock_in(item_id);
 CREATE INDEX IF NOT EXISTS idx_do_details_do ON delivery_order_details(delivery_order_id);
 CREATE INDEX IF NOT EXISTS idx_do_details_item ON delivery_order_details(item_id);
@@ -152,7 +143,7 @@ CREATE INDEX IF NOT EXISTS idx_menus_parent ON menus(parent_id);
 CREATE INDEX IF NOT EXISTS idx_menus_sort ON menus(sort_order);
 
 -- ============================================================
--- 5. SEED DATA (hanya jika tabel kosong)
+-- 7. SEED DATA
 -- ============================================================
 
 INSERT INTO roles (name, description)
@@ -167,14 +158,17 @@ INSERT INTO users (username, password, role)
 SELECT 'admin', 'admin', 'admin'
 WHERE NOT EXISTS (SELECT 1 FROM users WHERE username = 'admin');
 
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM users WHERE username = 'admin') THEN
-    INSERT INTO user_roles (user_id, role_name)
-    SELECT id, 'admin' FROM users WHERE username = 'admin'
-    ON CONFLICT (user_id, role_name) DO NOTHING;
-  END IF;
-END $$;
+INSERT INTO items (part_number, category, rack, current_stock)
+SELECT * FROM (VALUES
+  ('HOS-001', 'Hose', 'RAK-A1', 100),
+  ('HOS-002', 'Hose', 'RAK-A1', 50),
+  ('BOLT-001', 'Bolt', 'RAK-B1', 200),
+  ('BOLT-002', 'Bolt', 'RAK-B1', 150),
+  ('NUT-001', 'Nut', 'RAK-B2', 300),
+  ('FIT-001', 'Fitting', 'RAK-C1', 80),
+  ('SEAL-001', 'Seal', 'RAK-A2', 60)
+) AS t(part_number, category, rack, current_stock)
+WHERE NOT EXISTS (SELECT 1 FROM items WHERE part_number = t.part_number);
 
 INSERT INTO menus (name, url, icon, sort_order)
 SELECT 'Dashboard', '/dashboard', 'LayoutDashboard', 1
@@ -213,6 +207,10 @@ BEGIN
   WHERE NOT EXISTS (SELECT 1 FROM menus WHERE name = 'Master Role');
 
   INSERT INTO menus (name, url, icon, parent_id, sort_order)
+  SELECT 'Master Item', '/master/items', 'Package', master_id, 4
+  WHERE NOT EXISTS (SELECT 1 FROM menus WHERE name = 'Master Item');
+
+  INSERT INTO menus (name, url, icon, parent_id, sort_order)
   SELECT 'Stock Masuk', '/transactions/stock-in', 'ArrowRightLeft', transaksi_id, 1
   WHERE NOT EXISTS (SELECT 1 FROM menus WHERE name = 'Stock Masuk');
 
@@ -220,17 +218,3 @@ BEGIN
   SELECT 'Delivery Order', '/transactions/delivery-order', 'Truck', transaksi_id, 2
   WHERE NOT EXISTS (SELECT 1 FROM menus WHERE name = 'Delivery Order');
 END $$;
-
-INSERT INTO categories (name)
-SELECT name FROM (VALUES ('Hose'), ('Bolt'), ('Nut'), ('Fitting'), ('Seal')) AS t(name)
-WHERE NOT EXISTS (SELECT 1 FROM categories WHERE name = t.name);
-
-INSERT INTO racks (rack_code, description)
-SELECT rack_code, description FROM (VALUES 
-  ('RAK-A1', 'Rak A baris 1'),
-  ('RAK-A2', 'Rak A baris 2'),
-  ('RAK-B1', 'Rak B baris 1'),
-  ('RAK-B2', 'Rak B baris 2'),
-  ('RAK-C1', 'Rak C baris 1')
-) AS t(rack_code, description)
-WHERE NOT EXISTS (SELECT 1 FROM racks WHERE rack_code = t.rack_code);

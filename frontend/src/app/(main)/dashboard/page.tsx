@@ -19,11 +19,11 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchData = async () => {
       const { count: itemsCount } = await supabase
-        .from("items")
+        .from("mst_items")
         .select("*", { count: "exact", head: true })
 
       const { data: stockData } = await supabase
-        .from("items")
+        .from("mst_items")
         .select("current_stock")
 
       const totalStockValue =

@@ -52,7 +52,7 @@ export default function MenusPage() {
 
   const fetchMenus = async () => {
     const { data } = await supabase
-      .from("menus")
+      .from("mst_menus")
       .select("*")
       .order("sort_order")
       .order("name")
@@ -95,7 +95,7 @@ export default function MenusPage() {
 
     if (editItem) {
       const { error } = await supabase
-        .from("menus")
+        .from("mst_menus")
         .update(payload)
         .eq("id", editItem.id)
 
@@ -105,7 +105,7 @@ export default function MenusPage() {
       }
       toast.success("Menu berhasil diupdate")
     } else {
-      const { error } = await supabase.from("menus").insert(payload)
+      const { error } = await supabase.from("mst_menus").insert(payload)
 
       if (error) {
         toast.error("Gagal menambah menu")
@@ -120,6 +120,7 @@ export default function MenusPage() {
   }
 
   const handleEdit = (item: Menu) => {
+    if (!confirm("Yakin ingin mengedit menu ini?")) return
     setEditItem(item)
     setName(item.name)
     setUrl(item.url ?? "")
@@ -130,6 +131,7 @@ export default function MenusPage() {
   }
 
   const handleDelete = async (id: string) => {
+    if (!confirm("Yakin ingin menghapus menu ini?")) return
     const children = getChildren(id)
     if (children.length > 0) {
       const childNames = children.map((c) => c.name).join(", ")
@@ -137,7 +139,7 @@ export default function MenusPage() {
       return
     }
 
-    const { error } = await supabase.from("menus").delete().eq("id", id)
+    const { error } = await supabase.from("mst_menus").delete().eq("id", id)
     if (error) {
       toast.error("Gagal menghapus menu")
       return

@@ -31,7 +31,7 @@ export default function LoginPage() {
 
     // Query ke tabel users di Supabase
     const { data: user, error } = await supabase
-      .from("users")
+      .from("mst_users")
       .select("*")
       .eq("username", username.trim())
       .maybeSingle()
@@ -42,18 +42,10 @@ export default function LoginPage() {
       return
     }
 
-    const { data: roleRecords } = await supabase
-      .from("user_roles")
-      .select("role_name")
-      .eq("user_id", user.id)
-
-    const userRoles = roleRecords?.map(r => r.role_name) || [user.role]
-
     signIn({
       id: user.id,
       username: user.username,
       role: user.role,
-      roles: userRoles,
       created_at: user.created_at,
     })
 

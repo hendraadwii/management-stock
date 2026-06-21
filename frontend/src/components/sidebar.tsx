@@ -29,7 +29,7 @@ function SidebarContent({
     const fetchMenus = async () => {
       // 1. Ambil semua menu
       const { data: allMenus } = await supabase
-        .from("menus")
+        .from("mst_menus")
         .select("*")
         .order("sort_order")
         .order("name")
@@ -37,31 +37,25 @@ function SidebarContent({
       if (!allMenus) return
 
       // 2. Jika tidak ada user/role, kosongkan
-      const userRoles = user?.roles?.length ? user.roles : (user?.role ? [user.role] : [])
-
-      if (userRoles.length === 0) {
+      if (!user?.role) {
         setMenus([])
         return
       }
 
-      // Jika salah satu role adalah admin, selalu tampilkan semua menu
-      if (userRoles.some((r: string) => r.toLowerCase() === "admin")) {
+      // Jika role adalah admin, selalu tampilkan semua menu
+      if (user.role.toLowerCase() === "admin") {
         setMenus(allMenus)
         return
       }
 
-      // 3. Aggregate access_menus dari semua role
-      const { data: allRoleData } = await supabase
-        .from("roles")
+      // 3. Ambil access_menus dari role
+      const { data: roleData } = await supabase
+        .from("mst_roles")
         .select("name, access_menus")
-        .in("name", userRoles)
+        .eq("name", user.role)
+        .maybeSingle()
 
-      const allowedIds = new Set<string>()
-      for (const roleData of allRoleData || []) {
-        const menus = roleData.access_menus || []
-        menus.forEach((id: string) => allowedIds.add(id))
-      }
-      const allowedIdsArray = [...allowedIds]
+      const allowedIdsArray = roleData?.access_menus || []
 
       if (allowedIdsArray.length > 0) {
         const allowedIds = new Set(allowedIdsArray)

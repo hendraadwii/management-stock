@@ -43,7 +43,7 @@ export default function RolesPage() {
     
     // Ambil semua menu
     const { data: allMenus } = await supabase
-      .from("menus")
+      .from("mst_menus")
       .select("*")
       .order("sort_order")
       .order("name")
@@ -52,7 +52,7 @@ export default function RolesPage() {
 
     // Ambil hak akses menu saat ini dari kolom access_menus pada role tersebut
     const { data: currentRole } = await supabase
-      .from("roles")
+      .from("mst_roles")
       .select("access_menus")
       .eq("id", role.id)
       .maybeSingle()
@@ -78,7 +78,7 @@ export default function RolesPage() {
 
     // Simpan array menuId langsung ke kolom access_menus pada tabel roles
     const { error } = await supabase
-      .from("roles")
+      .from("mst_roles")
       .update({
         access_menus: selectedMenuIds,
       })
@@ -96,7 +96,7 @@ export default function RolesPage() {
   }
 
   const fetchRoles = async () => {
-    const { data } = await supabase.from("roles").select("*").order("name")
+    const { data } = await supabase.from("mst_roles").select("*").order("name")
     if (data) setRoles(data)
     setLoading(false)
   }
@@ -114,7 +114,7 @@ export default function RolesPage() {
 
     if (editItem) {
       const { error } = await supabase
-        .from("roles")
+        .from("mst_roles")
         .update({
           name: name.trim(),
           description: description.trim() || null,
@@ -127,7 +127,7 @@ export default function RolesPage() {
       }
       toast.success("Role berhasil diupdate")
     } else {
-      const { error } = await supabase.from("roles").insert({
+      const { error } = await supabase.from("mst_roles").insert({
         name: name.trim(),
         description: description.trim() || null,
       })
@@ -147,6 +147,7 @@ export default function RolesPage() {
   }
 
   const handleEdit = (item: Role) => {
+    if (!confirm("Yakin ingin mengedit role ini?")) return
     setEditItem(item)
     setName(item.name)
     setDescription(item.description ?? "")
@@ -154,7 +155,8 @@ export default function RolesPage() {
   }
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase.from("roles").delete().eq("id", id)
+    if (!confirm("Yakin ingin menghapus role ini?")) return
+    const { error } = await supabase.from("mst_roles").delete().eq("id", id)
 
     if (error) {
       toast.error("Gagal menghapus role")

@@ -4,7 +4,6 @@ export interface User {
   id: string
   username: string
   role: Role
-  roles?: string[]
   created_at: string
 }
 
@@ -22,12 +21,9 @@ export interface Rack {
 export interface Item {
   id: string
   part_number: string
-  item_name: string
-  category_id: string
-  rack_id: string
+  category: string | null
+  rack: string | null
   current_stock: number
-  categories?: Category
-  racks?: Rack
 }
 
 export interface StockIn {
