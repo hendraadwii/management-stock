@@ -45,7 +45,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Plus, Trash2, Pencil, Truck, FileDown, CheckCircle, FileText } from "lucide-react"
-import * as XLSX from "xlsx"
+import ExcelJS from "exceljs"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
 
@@ -349,71 +349,22 @@ export default function DeliveryOrderPage() {
 
     const details = doDetail.delivery_order_details || []
 
-    const rawData = [
-      ["No PO", doRecord.po_number, "", ""],
-      ["No DO", doRecord.do_number, "", ""],
-      ["Shipping", doRecord.shipping, "", ""],
-      ["Date", new Date(doRecord.created_at).toLocaleDateString("id-ID"), "", ""],
-      ["", "", "", ""],
-      ["No", "Category", "Part Number", "Qty Out"],
-      ...details.map((d: any, i: number) => [
-        String(i + 1),
-        d.items?.category ?? "-",
-        d.items?.part_number ?? "-",
-        d.qty,
-      ]),
+    const workbook = new ExcelJS.Workbook()
+    workbook.creator = "Management Stock"
+    workbook.lastModifiedBy = "Management Stock"
+    const worksheet = workbook.addWorksheet("Delivery Order")
+
+    worksheet.columns = [
+      { width: 8 },
+      { width: 25 },
+      { width: 35 },
+      { width: 15 },
     ]
 
-    const ws = XLSX.utils.aoa_to_sheet(rawData)
-    const thin = { style: "thin" }
-    const allBorder = { top: thin, bottom: thin, left: thin, right: thin }
-
-    const maxRow = rawData.length - 1
-    for (let r = 0; r <= maxRow; r++) {
-      for (let c = 0; c <= 3; c++) {
-        const addr = XLSX.utils.encode_cell({ r, c })
-        if (!ws[addr]) ws[addr] = { t: "s", v: "" }
-      }
-    }
-
-    const tblStart = 5
-    for (let c = 0; c <= 3; c++) {
-      const addr = XLSX.utils.encode_cell({ r: tblStart, c })
-      ws[addr].s = {
-        font: { bold: true, sz: 11 },
-        fill: { fgColor: { rgb: "F3F4F6" } },
-        alignment: { horizontal: "center", vertical: "center" },
-        border: allBorder,
-      }
-    }
-
-    for (let r = tblStart + 1; r <= maxRow; r++) {
-      for (let c = 0; c <= 3; c++) {
-        const addr = XLSX.utils.encode_cell({ r, c })
-        let hal = "left"
-        if (c === 0) hal = "center"
-        if (c === 3) hal = "right"
-        ws[addr].s = {
-          font: { sz: 11 },
-          alignment: { horizontal: hal, vertical: "center" },
-          border: allBorder,
-        }
-      }
-    }
-
-    ws["!cols"] = [
-      { wch: 8 },
-      { wch: 25 },
-      { wch: 35 },
-      { wch: 15 },
-    ]
-
-    ws["!print"] = {
+    worksheet.pageSetup = {
       paperSize: 9,
       orientation: "portrait",
       fitToPage: true,
-      fitToWidth: 1,
-      fitToHeight: 0,
       margins: {
         left: 0.7,
         right: 0.7,
@@ -424,9 +375,119 @@ export default function DeliveryOrderPage() {
       },
     }
 
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, "Delivery Order")
-    XLSX.writeFile(wb, `DO_${doRecord.do_number.replace(/\//g, "-")}.xlsx`)
+    const borderStyle = {
+      top: { style: "thin" as const },
+      bottom: { style: "thin" as const },
+      left: { style: "thin" as const },
+      right: { style: "thin" as const },
+    }
+
+    const setCellStyle = (cell: ExcelJS.Cell, options: Partial<ExcelJS.Style> = {}) => {
+      cell.font = { size: 11, ...options.font }
+      cell.alignment = {
+        vertical: "middle",
+        ...options.alignment,
+      }
+      cell.border = borderStyle
+      if (options.fill) cell.fill = options.fill
+      if (options.numFmt) cell.numFmt = options.numFmt
+    }
+
+    const headerData = [
+      ["No PO", doRecord.po_number],
+      ["No DO", doRecord.do_number],
+      ["Shipping", doRecord.shipping],
+      ["Date", new Date(doRecord.created_at).toLocaleDateString("id-ID")],
+    ]
+
+    headerData.forEach((row, idx) => {
+      const r = idx + 1
+      const labelCell = worksheet.getCell(r, 1)
+      const valueCell = worksheet.getCell(r, 2)
+      labelCell.value = row[0]
+      valueCell.value = row[1]
+      setCellStyle(labelCell)
+      setCellStyle(valueCell)
+      if (r <= 4) {
+        labelCell.alignment = { horizontal: "left", vertical: "middle" }
+        valueCell.alignment = { horizontal: "left", vertical: "middle" }
+      }
+    })
+
+    const blankRow = 5
+    worksheet.getRow(blankRow).height = 1
+
+    const tableStartRow = 7
+    const headerRow = tableStartRow
+    const tableHeaders = ["No", "Category", "Part Number", "Qty Out"]
+
+    tableHeaders.forEach((header, idx) => {
+      const cell = worksheet.getCell(headerRow, idx + 1)
+      cell.value = header
+      setCellStyle(cell, {
+        font: { bold: true },
+        alignment: { horizontal: "center" },
+        fill: {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFF3F4F6" },
+        },
+      })
+    })
+
+    details.forEach((d: any, i: number) => {
+      const rowNumber = tableStartRow + i + 1
+      const row = worksheet.getRow(rowNumber)
+      row.getCell(1).value = i + 1
+      row.getCell(2).value = d.items?.category ?? "-"
+      row.getCell(3).value = d.items?.part_number ?? "-"
+      row.getCell(4).value = d.qty
+
+      for (let c = 1; c <= 4; c++) {
+        const cell = row.getCell(c)
+        const alignment =
+          c === 1
+            ? { horizontal: "center" }
+            : c === 4
+              ? { horizontal: "right" }
+              : { horizontal: "left" }
+
+        setCellStyle(cell, {
+          alignment,
+        })
+      }
+    })
+
+    const signatureLabelRow = 11
+    const signatureLineRow = 14
+    const signatureCol = 4
+
+    const signatureLabel = worksheet.getCell(signatureLabelRow, signatureCol)
+    signatureLabel.value = "Mengetahui,"
+    signatureLabel.font = { size: 11 }
+    signatureLabel.alignment = { horizontal: "left", vertical: "middle" }
+
+    const signatureLineCell = worksheet.getCell(signatureLineRow, signatureCol)
+    signatureLineCell.value = ""
+    signatureLineCell.alignment = { horizontal: "left", vertical: "middle" }
+    signatureLineCell.border = {
+      top: { style: "none" },
+      bottom: { style: "thin" },
+      left: { style: "none" },
+      right: { style: "none" },
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer()
+    const blob = new Blob([buffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    })
+
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `DO_${doRecord.do_number.replace(/\//g, "-")}.xlsx`
+    link.click()
+    URL.revokeObjectURL(url)
   }
 
   const handleExportPdf = async () => {
