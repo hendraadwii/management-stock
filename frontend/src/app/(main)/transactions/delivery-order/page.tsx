@@ -348,14 +348,13 @@ export default function DeliveryOrderPage() {
     }
 
     const details = doDetail.delivery_order_details || []
-    const lastDataRow = 5 + details.length
 
     const rawData = [
-      ["NO PO", doRecord.po_number],
-      ["NO DO", doRecord.do_number],
-      ["Shipping", doRecord.shipping],
-      ["Date", new Date(doRecord.created_at).toLocaleDateString("id-ID")],
-      [],
+      ["NO PO", doRecord.po_number, "", ""],
+      ["NO DO", doRecord.do_number, "", ""],
+      ["Shipping", doRecord.shipping, "", ""],
+      ["Date", new Date(doRecord.created_at).toLocaleDateString("id-ID"), "", ""],
+      ["", "", "", ""],
       ["No", "Category", "Part Number", "QTY Out"],
       ...details.map((d: any, i: number) => [
         i + 1,
@@ -363,61 +362,51 @@ export default function DeliveryOrderPage() {
         d.items?.part_number ?? "-",
         d.qty,
       ]),
-      [],
+      ["", "", "", ""],
       ["", "", "", "Mengetahui,"],
       ["", "", "", `( ${" ".repeat(20)} )`],
     ]
 
     const ws = XLSX.utils.aoa_to_sheet(rawData)
-
-    const range = XLSX.utils.decode_range(ws["!ref"] || "A1:D1")
+    const maxRow = rawData.length - 1
+    const maxCol = 3
     const thin = { style: "thin" }
-    const border = { top: thin, bottom: thin, left: thin, right: thin }
+    const allBorder = { top: thin, bottom: thin, left: thin, right: thin }
 
-    for (let r = range.s.r; r <= range.e.r; r++) {
-      for (let c = range.s.c; c <= range.e.c; c++) {
+    ws["!ref"] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: maxRow, c: maxCol } })
+
+    for (let r = 0; r <= maxRow; r++) {
+      for (let c = 0; c <= maxCol; c++) {
         const addr = XLSX.utils.encode_cell({ r, c })
-        if (!ws[addr]) continue
-        if (!ws[addr].s) ws[addr].s = {}
-        ws[addr].s.border = border
+        if (!ws[addr]) ws[addr] = { t: "s", v: "" }
+        ws[addr].s = { ...ws[addr].s, border: allBorder }
       }
     }
 
-    for (let c = 0; c <= range.e.c; c++) {
+    for (let c = 0; c <= maxCol; c++) {
       const addr = XLSX.utils.encode_cell({ r: 0, c })
-      if (!ws[addr]) continue
-      if (!ws[addr].s) ws[addr].s = {}
-      ws[addr].s.font = { bold: true }
+      ws[addr].s = { ...ws[addr].s, font: { bold: true } }
     }
 
     for (let r = 0; r <= 3; r++) {
-      const addr0 = XLSX.utils.encode_cell({ r, c: 0 })
-      if (!ws[addr0]) continue
-      if (!ws[addr0].s) ws[addr0].s = {}
-      ws[addr0].s.font = { bold: true }
+      const addr = XLSX.utils.encode_cell({ r, c: 0 })
+      ws[addr].s = { ...ws[addr].s, font: { bold: true } }
     }
 
     const headerRow = 5
-    for (let c = 0; c <= range.e.c; c++) {
+    for (let c = 0; c <= maxCol; c++) {
       const addr = XLSX.utils.encode_cell({ r: headerRow, c })
-      if (!ws[addr]) continue
-      if (!ws[addr].s) ws[addr].s = {}
-      ws[addr].s.font = { bold: true }
-      ws[addr].s.alignment = { horizontal: "center", vertical: "center" }
+      ws[addr].s = { ...ws[addr].s, font: { bold: true }, alignment: { horizontal: "center", vertical: "center" } }
     }
 
-    for (let r = range.s.r; r <= range.e.r; r++) {
+    for (let r = 0; r <= maxRow; r++) {
       const addr = XLSX.utils.encode_cell({ r, c: 0 })
-      if (!ws[addr]) continue
-      if (!ws[addr].s) ws[addr].s = {}
-      ws[addr].s.alignment = { horizontal: "center", vertical: "center" }
+      ws[addr].s = { ...ws[addr].s, alignment: { horizontal: "center", vertical: "center" } }
     }
 
-    for (let r = 6; r <= range.e.r; r++) {
+    for (let r = 6; r <= maxRow; r++) {
       const addr = XLSX.utils.encode_cell({ r, c: 3 })
-      if (!ws[addr]) continue
-      if (!ws[addr].s) ws[addr].s = {}
-      ws[addr].s.alignment = { horizontal: "center", vertical: "center" }
+      ws[addr].s = { ...ws[addr].s, alignment: { horizontal: "center", vertical: "center" } }
     }
 
     ws["!cols"] = [
@@ -477,56 +466,87 @@ export default function DeliveryOrderPage() {
 
     const doc = new jsPDF("portrait", "mm", "a4")
     const pageW = doc.internal.pageSize.getWidth()
-    const margin = 20
-    let y = 25
+    const margin = 15
+    const contentW = pageW - margin * 2
+    const grayBorder: [number, number, number] = [160, 160, 160]
+    const grayBg: [number, number, number] = [245, 245, 245]
+    const lineW = 0.25
 
+    doc.setFont("helvetica")
+
+    const yTitle = 30
+    doc.setFontSize(22)
+    doc.setTextColor(0)
+    doc.setFont("helvetica", "bold")
+    doc.text("DELIVERY ORDER", pageW / 2, yTitle, { align: "center" })
     doc.setFont("helvetica", "normal")
-    doc.setFontSize(11)
-
-    const info = [
-      ["NO PO", doRecord.po_number],
-      ["NO DO", doRecord.do_number],
-      ["Shipping", doRecord.shipping],
-      ["Date", new Date(doRecord.created_at).toLocaleDateString("id-ID")],
-    ]
-    info.forEach(([label, value]) => {
-      doc.setFont("helvetica", "bold")
-      doc.text(`${label}:`, margin, y)
-      const labelW = doc.getTextWidth(`${label}:`)
-      doc.setFont("helvetica", "normal")
-      doc.text(String(value), margin + labelW + 2, y)
-      y += 7
-    })
-
-    y += 4
-
-    const tableBody = details.map((d: any, i: number) => [
-      i + 1,
-      d.items?.category ?? "-",
-      d.items?.part_number ?? "-",
-      d.qty,
-    ])
 
     autoTable(doc, {
-      startY: y,
-      head: [["No", "Category", "Part Number", "QTY Out"]],
-      body: tableBody,
+      startY: yTitle + 16,
+      body: [
+        ["NO PO", doRecord.po_number, "Shipping", doRecord.shipping],
+        ["NO DO", doRecord.do_number, "Date", new Date(doRecord.created_at).toLocaleDateString("id-ID")],
+      ],
       theme: "grid",
-      headStyles: { fillColor: [220, 220, 220], textColor: [0, 0, 0], fontStyle: "bold" },
-      styles: { fontSize: 10, cellPadding: 3 },
+      styles: { fontSize: 10, cellPadding: 4, lineColor: grayBorder, lineWidth: lineW, textColor: [50, 50, 50] },
       columnStyles: {
-        0: { halign: "center", cellWidth: 12 },
-        3: { halign: "center" },
+        0: { fontStyle: "bold", cellWidth: 22 },
+        1: { cellWidth: 68 },
+        2: { fontStyle: "bold", cellWidth: 24 },
+        3: { cellWidth: contentW - 22 - 68 - 24 },
       },
       margin: { left: margin, right: margin },
     })
 
-    const finalY = (doc as any).lastAutoTable.finalY + 10
+    const tableBody = details.map((d: any, i: number) => [
+      i + 1,
+      d.items?.part_number ?? "-",
+      d.items?.category ?? "-",
+      d.qty,
+    ])
 
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 10,
+      head: [["No", "Part Number", "Category", "Qty Out"]],
+      body: tableBody,
+      theme: "grid",
+      headStyles: {
+        fillColor: grayBg,
+        textColor: [0, 0, 0],
+        fontStyle: "bold",
+        halign: "center",
+        lineColor: grayBorder,
+        lineWidth: lineW,
+      },
+      styles: {
+        fontSize: 10,
+        cellPadding: 4,
+        lineColor: grayBorder,
+        lineWidth: lineW,
+        textColor: [50, 50, 50],
+      },
+      columnStyles: {
+        0: { halign: "center", cellWidth: 16 },
+        1: { cellWidth: contentW - 16 - 50 - 38 },
+        2: { cellWidth: 50 },
+        3: { halign: "right", cellWidth: 38 },
+      },
+      margin: { left: margin, right: margin },
+    })
+
+    const tblEnd = (doc as any).lastAutoTable.finalY + 8
+
+    const signY = tblEnd + 24
     doc.setFont("helvetica", "normal")
-    doc.setFontSize(10)
-    doc.text("Mengetahui,", pageW - margin, finalY, { align: "right" })
-    doc.text(`( ${" ".repeat(25)} )`, pageW - margin, finalY + 10, { align: "right" })
+    doc.setFontSize(12)
+    const lineStr = "____________________________"
+    const lineX = pageW - margin - doc.getTextWidth(lineStr)
+    doc.setFont("helvetica", "bold")
+    doc.setFontSize(11)
+    doc.text("Mengetahui,", lineX, signY, { align: "left" })
+    doc.setFont("helvetica", "normal")
+    doc.setFontSize(12)
+    doc.text(lineStr, lineX, signY + 26, { align: "left" })
 
     doc.save(`DO_${doRecord.do_number.replace(/\//g, "-")}.pdf`)
   }
