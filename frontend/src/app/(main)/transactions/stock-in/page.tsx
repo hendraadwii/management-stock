@@ -37,7 +37,7 @@ import {
 import { DataTable } from "@/components/data-table"
 import { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
-import { Plus, Trash2, Pencil, ArrowRightLeft, Package, Truck } from "lucide-react"
+import { Plus, Trash2, Pencil, ArrowRightLeft, History } from "lucide-react"
 
 interface StockInRecord {
   id: string
@@ -49,11 +49,15 @@ interface StockInRecord {
   items?: Item
 }
 
+interface GroupedItem {
+  item: Item
+  totalQty: number
+}
+
 export default function StockInPage() {
   const [items, setItems] = useState<Item[]>([])
   const [records, setRecords] = useState<StockInRecord[]>([])
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [doHistory, setDoHistory] = useState<any[]>([])
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editRecord, setEditRecord] = useState<StockInRecord | null>(null)
   const [selectedItem, setSelectedItem] = useState("")
@@ -73,7 +77,6 @@ export default function StockInPage() {
       .from("stock_in")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(50)
 
     if (itemsData) setItems(itemsData)
     if (recordsData) {
@@ -89,62 +92,30 @@ export default function StockInPage() {
     fetchData()
   }, [])
 
-  useEffect(() => {
-    if (!selectedId) {
-      setDoHistory([])
-      return
-    }
-    const record = records.find((r) => r.id === selectedId)
-    if (!record) return
-
-    const fetchDoHistory = async () => {
-      const { data: doData } = await supabase
-        .from("delivery_orders")
-        .select("*")
-
-      const { data: detailsData } = await supabase
-        .from("delivery_order_details")
-        .select("*")
-        .eq("item_id", record.item_id)
-
-      const { data: itemsData } = await supabase
-        .from("mst_items")
-        .select("*")
-
-      if (doData && detailsData && itemsData) {
-        const groupedMap = new Map<string, any>()
-
-        for (const det of detailsData) {
-          if (det.item_id !== record.item_id) continue
-
-          const doRecord = doData.find((d: any) => d.id === det.delivery_order_id)
-          if (!doRecord) continue
-
-          const key = `${det.delivery_order_id}-${det.item_id}`
-          const item = itemsData.find((i: any) => i.id === det.item_id)
-
-          if (!groupedMap.has(key)) {
-            groupedMap.set(key, {
-              id: `${det.delivery_order_id}-${det.id}`,
-              qty: det.qty,
-              do_number: doRecord?.do_number ?? "-",
-              po_number: doRecord?.po_number ?? "-",
-              status: doRecord?.status ?? "draft",
-              created_at: doRecord?.created_at ?? det.created_at,
-              items: item ?? null,
-            })
-          } else {
-            const existing = groupedMap.get(key)
-            existing.qty += det.qty
-          }
-        }
-
-        setDoHistory(Array.from(groupedMap.values()))
+  const groupedData = useMemo(() => {
+    const map = new Map<string, GroupedItem>()
+    for (const r of records) {
+      const item = items.find((i) => i.id === r.item_id)
+      if (!item) continue
+      if (!map.has(item.id)) {
+        map.set(item.id, { item, totalQty: 0 })
       }
+      map.get(item.id)!.totalQty += r.qty
     }
+    return Array.from(map.values()).sort((a, b) =>
+      a.item.part_number.localeCompare(b.item.part_number)
+    )
+  }, [items, records])
 
-    fetchDoHistory()
-  }, [selectedId, records])
+  const selectedItemRecords = useMemo(() => {
+    if (!selectedItemId) return []
+    return records
+      .filter((r) => r.item_id === selectedItemId)
+      .sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )
+  }, [selectedItemId, records])
 
   const openNewDialog = () => {
     setEditRecord(null)
@@ -154,12 +125,7 @@ export default function StockInPage() {
     setDialogOpen(true)
   }
 
-  const openEditDialog = () => {
-    if (!selectedId) return
-    if (!confirm("Yakin ingin mengedit data ini?")) return
-    const record = records.find((r) => r.id === selectedId)
-    if (!record) return
-
+  const openEditDialog = (record: StockInRecord) => {
     setEditRecord(record)
     setSelectedItem(record.item_id)
     setQty(String(record.qty))
@@ -167,12 +133,8 @@ export default function StockInPage() {
     setDialogOpen(true)
   }
 
-  const handleDelete = async () => {
-    if (!selectedId) return
+  const handleDelete = async (record: StockInRecord) => {
     if (!confirm("Yakin ingin menghapus data stock masuk ini?")) return
-
-    const record = records.find((r) => r.id === selectedId)
-    if (!record) return
 
     const { data: itemData } = await supabase
       .from("mst_items")
@@ -191,7 +153,7 @@ export default function StockInPage() {
     const { error } = await supabase
       .from("stock_in")
       .delete()
-      .eq("id", selectedId)
+      .eq("id", record.id)
 
     if (error) {
       toast.error("Gagal menghapus data stock masuk")
@@ -199,7 +161,6 @@ export default function StockInPage() {
     }
 
     toast.success("Data stock masuk berhasil dihapus")
-    setSelectedId(null)
     fetchData()
   }
 
@@ -214,27 +175,6 @@ export default function StockInPage() {
     setLoading(true)
     const qtyNum = parseInt(qty)
     const normalizedNote = note.trim() || null
-
-    if (!editRecord) {
-      const duplicateExists = records.some((record) => {
-        const sameDay =
-          new Date(record.created_at).toDateString() === new Date().toDateString()
-        const sameNote = (record.note || "") === (normalizedNote || "")
-
-        return (
-          record.item_id === selectedItem &&
-          record.qty === qtyNum &&
-          sameNote &&
-          sameDay
-        )
-      })
-
-      if (duplicateExists) {
-        toast.error("Data dengan item, qty, dan keterangan yang sama sudah ada")
-        setLoading(false)
-        return
-      }
-    }
 
     if (editRecord) {
       const oldQty = editRecord.qty
@@ -312,7 +252,7 @@ export default function StockInPage() {
     fetchData()
   }
 
-  const columns: ColumnDef<StockInRecord>[] = [
+  const columns: ColumnDef<GroupedItem>[] = [
     {
       id: "select",
       header: "",
@@ -321,44 +261,35 @@ export default function StockInPage() {
           type="radio"
           name="stockin-select"
           className="h-4 w-4 cursor-pointer"
-          checked={selectedId === row.original.id}
-          onChange={() => setSelectedId(row.original.id)}
+          checked={selectedItemId === row.original.item.id}
+          onChange={() => setSelectedItemId(row.original.item.id)}
         />
       ),
     },
     {
-      accessorKey: "items.part_number",
+      accessorKey: "item.part_number",
       header: "Part Number",
-      cell: ({ row }) => row.original.items?.part_number ?? "-",
+      cell: ({ row }) => row.original.item.part_number,
     },
     {
-      accessorKey: "items.category",
+      accessorKey: "item.category",
       header: "Category",
-      cell: ({ row }) => row.original.items?.category ?? "-",
+      cell: ({ row }) => row.original.item.category ?? "-",
     },
     {
-      accessorKey: "items.rack",
+      accessorKey: "item.rack",
       header: "Rak",
-      cell: ({ row }) => row.original.items?.rack ?? "-",
+      cell: ({ row }) => row.original.item.rack ?? "-",
     },
     {
-      accessorKey: "qty",
-      header: "Qty Masuk",
+      id: "total_qty",
+      header: "Total Qty Masuk",
+      cell: ({ row }) => row.original.totalQty,
     },
     {
       id: "current_stock",
       header: "Current Stock",
-      cell: ({ row }) => row.original.items?.current_stock ?? "-",
-    },
-    {
-      accessorKey: "note",
-      header: "Keterangan",
-    },
-    {
-      accessorKey: "created_at",
-      header: "Tanggal",
-      cell: ({ row }) =>
-        new Date(row.original.created_at).toLocaleString("id-ID"),
+      cell: ({ row }) => row.original.item.current_stock,
     },
   ]
 
@@ -378,120 +309,88 @@ export default function StockInPage() {
             <Plus className="mr-2 h-4 w-4" />
             New Data
           </Button>
-          <Button
-            variant="outline"
-            disabled={!selectedId}
-            onClick={openEditDialog}
-          >
-            <Pencil className="mr-2 h-4 w-4" />
-            Edit Data
-          </Button>
-          <Button
-            variant="destructive"
-            disabled={!selectedId}
-            onClick={handleDelete}
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete Data
-          </Button>
         </div>
       </div>
 
       <DataTable
         columns={columns}
-        data={records}
-        searchKey="items.part_number"
+        data={groupedData}
+        searchKey="item.part_number"
         searchPlaceholder="Cari part number..."
       />
 
-      {selectedId && (() => {
-        const r = records.find(rec => rec.id === selectedId)
-        if (!r) return null
+      {selectedItemId && (() => {
+        const item = items.find((i) => i.id === selectedItemId)
+        if (!item) return null
         return (
           <>
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Package className="h-5 w-5" />
-                  Detail Stock Masuk
+                  <History className="h-5 w-5" />
+                  History Stock Masuk
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="flex gap-2 text-sm">
-                    <span className="font-semibold min-w-28">Tanggal:</span>
-                    <span>{new Date(r.created_at).toLocaleDateString("id-ID")}</span>
-                  </div>
-                  <div className="flex gap-2 text-sm">
-                    <span className="font-semibold min-w-28">Part Number:</span>
-                    <span>{r.items?.part_number ?? "-"}</span>
-                  </div>
-                  <div className="flex gap-2 text-sm">
-                    <span className="font-semibold min-w-28">Category:</span>
-                    <span>{r.items?.category ?? "-"}</span>
-                  </div>
-                  <div className="flex gap-2 text-sm">
-                    <span className="font-semibold min-w-28">Rak:</span>
-                    <span>{r.items?.rack ?? "-"}</span>
-                  </div>
-                  <div className="flex gap-2 text-sm">
-                    <span className="font-semibold min-w-28">Qty Masuk:</span>
-                    <span className="text-green-600 font-semibold">+{r.qty}</span>
-                  </div>
-                  <div className="flex gap-2 text-sm sm:col-span-2">
-                    <span className="font-semibold min-w-28">Keterangan:</span>
-                    <span>{r.note || "-"}</span>
-                  </div>
+              <CardContent>
+                <div className="rounded-md border overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Qty Masuk</TableHead>
+                        <TableHead>Current Stock</TableHead>
+                        <TableHead>Keterangan</TableHead>
+                        <TableHead>Tanggal</TableHead>
+                        <TableHead className="w-24">Aksi</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedItemRecords.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                            Belum ada riwayat stock masuk
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        selectedItemRecords.map((r) => (
+                          <TableRow key={r.id}>
+                            <TableCell className="text-green-600 font-semibold">
+                              +{r.qty}
+                            </TableCell>
+                            <TableCell className="tabular-nums">
+                              {r.items?.current_stock ?? "-"}
+                            </TableCell>
+                            <TableCell>{r.note ?? "-"}</TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {new Date(r.created_at).toLocaleString("id-ID")}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => openEditDialog(r)}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive"
+                                  onClick={() => handleDelete(r)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
                 </div>
               </CardContent>
             </Card>
-
-            {doHistory.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Truck className="h-5 w-5" />
-                    History Stock Keluar (DO)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="rounded-md border overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>DO Number</TableHead>
-                          <TableHead>PO Number</TableHead>
-                          <TableHead className="text-center">Qty Keluar</TableHead>
-                          <TableHead>Tanggal</TableHead>
-                          <TableHead>Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {doHistory.map((det: any) => (
-                          <TableRow key={det.id}>
-                            <TableCell>{det.do_number}</TableCell>
-                            <TableCell>{det.po_number}</TableCell>
-                            <TableCell className="text-center text-red-600 font-semibold">
-                              -{det.qty}
-                            </TableCell>
-                            <TableCell>
-                              {new Date(det.created_at).toLocaleString("id-ID")}
-                            </TableCell>
-                            <TableCell>
-                              {det.status === "submitted" ? (
-                                <span className="text-green-600 font-semibold">Submitted</span>
-                              ) : (
-                                <span className="text-yellow-600 font-semibold">Draft</span>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
           </>
         )
       })()}
