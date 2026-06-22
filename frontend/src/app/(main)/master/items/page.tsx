@@ -134,19 +134,34 @@ export default function ItemsPage() {
   const handleDelete = async () => {
     if (!deleteTarget) return
 
+    const { count: stockCount } = await supabase
+      .from("trx_stock")
+      .select("*", { count: "exact", head: true })
+      .eq("item_id", deleteTarget.id)
+
+    const { count: doCount } = await supabase
+      .from("delivery_order_details")
+      .select("*", { count: "exact", head: true })
+      .eq("item_id", deleteTarget.id)
+
+    if ((stockCount ?? 0) > 0 || (doCount ?? 0) > 0) {
+      const reasons: string[] = []
+      if ((stockCount ?? 0) > 0) reasons.push("Stock")
+      if ((doCount ?? 0) > 0) reasons.push("Delivery Order")
+      toast.error(
+        `Item tidak bisa dihapus karena masih memiliki data di ${reasons.join(" & ")}`
+      )
+      setDeleteTarget(null)
+      return
+    }
+
     const { error } = await supabase
       .from("mst_items")
       .delete()
       .eq("id", deleteTarget.id)
 
     if (error) {
-      if (error.code === "23503") {
-        toast.error(
-          "Item tidak bisa dihapus karena masih memiliki riwayat transaksi"
-        )
-      } else {
-        toast.error("Gagal menghapus item")
-      }
+      toast.error("Gagal menghapus item")
       setDeleteTarget(null)
       return
     }
