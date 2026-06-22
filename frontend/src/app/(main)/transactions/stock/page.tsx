@@ -7,13 +7,7 @@ import { Item } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+
 import {
   Dialog,
   DialogContent,
@@ -65,6 +59,8 @@ export default function StockInPage() {
   const [editRecord, setEditRecord] = useState<StockInRecord | null>(null)
   const [recordToDelete, setRecordToDelete] = useState<StockInRecord | null>(null)
   const [selectedItem, setSelectedItem] = useState("")
+  const [itemSearch, setItemSearch] = useState("")
+  const [itemPopoverOpen, setItemPopoverOpen] = useState(false)
   const [qty, setQty] = useState("")
   const [note, setNote] = useState("")
   const [loading, setLoading] = useState(false)
@@ -125,6 +121,7 @@ export default function StockInPage() {
   const openNewDialog = () => {
     setEditRecord(null)
     setSelectedItem("")
+    setItemSearch("")
     setQty("")
     setNote("")
     setDialogOpen(true)
@@ -457,27 +454,74 @@ export default function StockInPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label>Pilih Barang</Label>
-              <Select
-                value={selectedItem}
-                onValueChange={(v) => v && setSelectedItem(v)}
-                disabled={!!editRecord}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Cari & pilih barang...">
-                    {(() => {
-                      const sel = items.find(i => i.id === selectedItem)
-                      return sel ? `${sel.part_number} (Stock: ${sel.current_stock})` : null
-                    })()}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {items.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      <span className="truncate">{item.part_number} - {item.category} (Stock: {item.current_stock})</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="relative">
+                <Input
+                  placeholder="Ketik part number untuk cari..."
+                  value={
+                    selectedItem && !itemPopoverOpen
+                      ? (items.find(i => i.id === selectedItem)?.part_number ?? itemSearch)
+                      : itemSearch
+                  }
+                  onChange={(e) => {
+                    setItemSearch(e.target.value)
+                    if (selectedItem) setSelectedItem("")
+                  }}
+                  onFocus={() => setItemPopoverOpen(true)}
+                  onBlur={() => setTimeout(() => setItemPopoverOpen(false), 200)}
+                  disabled={!!editRecord}
+                  className="w-full"
+                />
+                {itemPopoverOpen && (
+                  <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border bg-popover shadow-md min-w-0">
+                        <table className="w-full table-fixed text-xs">
+                          <thead>
+                            <tr className="text-muted-foreground border-b">
+                              <th className="truncate px-4 py-2 font-medium text-left border-r w-[45%]">Part Number</th>
+                              <th className="truncate px-4 py-2 font-medium text-left border-r w-[25%]">Category</th>
+                              <th className="truncate px-4 py-2 font-medium text-left border-r w-[15%]">Rak</th>
+                              <th className="px-4 py-2 font-medium text-right w-[15%]">Stock</th>
+                            </tr>
+                          </thead>
+                      <tbody>
+                        {(() => {
+                          const filtered = items.filter((item) =>
+                            !itemSearch.trim()
+                              ? true
+                              : item.part_number.toLowerCase().includes(itemSearch.toLowerCase()) ||
+                                (item.category ?? "").toLowerCase().includes(itemSearch.toLowerCase())
+                          )
+                          return filtered.length === 0 ? (
+                            <tr>
+                              <td colSpan={4} className="px-3 py-6 text-center text-sm text-muted-foreground">
+                                Barang tidak ditemukan
+                              </td>
+                            </tr>
+                          ) : (
+                            filtered.map((item) => (
+                              <tr
+                                key={item.id}
+                                className="text-sm hover:bg-accent aria-selected:bg-accent cursor-pointer"
+                                aria-selected={selectedItem === item.id}
+                                onMouseDown={(e) => {
+                                  e.preventDefault()
+                                  setSelectedItem(item.id)
+                                  setItemSearch("")
+                                  setItemPopoverOpen(false)
+                                }}
+                              >
+                                    <td className="truncate px-4 py-2.5 border-r border-b">{item.part_number}</td>
+                                    <td className="truncate px-4 py-2.5 border-r border-b">{item.category ?? "-"}</td>
+                                    <td className="truncate px-4 py-2.5 border-r border-b">{item.rack ?? "-"}</td>
+                                    <td className="tabular-nums text-right px-4 py-2.5 border-b">{item.current_stock}</td>
+                              </tr>
+                            ))
+                          )
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="grid gap-3 sm:gap-4 sm:grid-cols-2">
