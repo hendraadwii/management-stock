@@ -316,18 +316,20 @@ export default function StockInPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            Stock Masuk
+            Stock
           </h1>
           <p className="text-sm text-muted-foreground">
             Catat barang masuk ke gudang
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button onClick={openNewDialog}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Data
-          </Button>
-        </div>
+        {user?.role !== "user" && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button onClick={openNewDialog}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Data
+            </Button>
+          </div>
+        )}
       </div>
 
       <DataTable
@@ -358,13 +360,13 @@ export default function StockInPage() {
                         <TableHead>Current Stock</TableHead>
                         <TableHead>Keterangan</TableHead>
                         <TableHead>Tanggal</TableHead>
-                        <TableHead className="w-24">Aksi</TableHead>
+                        {user?.role !== "user" && <TableHead className="w-24">Aksi</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {selectedItemRecords.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                          <TableCell colSpan={user?.role !== "user" ? 5 : 4} className="h-24 text-center text-muted-foreground">
                             Belum ada riwayat stock masuk
                           </TableCell>
                         </TableRow>
@@ -381,26 +383,28 @@ export default function StockInPage() {
                             <TableCell className="whitespace-nowrap">
                               {new Date(r.created_at).toLocaleString("id-ID")}
                             </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  onClick={() => openEditDialog(r)}
-                                >
-                                  <Pencil className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-destructive"
-                                  onClick={() => openDeleteDialog(r)}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            </TableCell>
+                            {user?.role !== "user" && (
+                              <TableCell>
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => openEditDialog(r)}
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-destructive"
+                                    onClick={() => openDeleteDialog(r)}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            )}
                           </TableRow>
                         ))
                       )}
