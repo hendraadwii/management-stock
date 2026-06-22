@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react"
 import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
 import { Item } from "@/types"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -35,13 +36,16 @@ import { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
 import { Plus, Trash2, Pencil, ArrowRightLeft, History } from "lucide-react"
 
-interface StockInRecord {
+interface HistoryRecord {
   id: string
   item_id: string
   qty: number
+  tipe: "Stock Masuk" | "Delivery Order"
   note: string | null
   created_at: string
-  created_by: string
+  created_by?: string
+  do_number: string | null
+  po_number: string | null
   items?: Item
 }
 
@@ -52,12 +56,12 @@ interface GroupedItem {
 
 export default function StockInPage() {
   const [items, setItems] = useState<Item[]>([])
-  const [records, setRecords] = useState<StockInRecord[]>([])
+  const [records, setRecords] = useState<HistoryRecord[]>([])
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [editRecord, setEditRecord] = useState<StockInRecord | null>(null)
-  const [recordToDelete, setRecordToDelete] = useState<StockInRecord | null>(null)
+  const [editRecord, setEditRecord] = useState<HistoryRecord | null>(null)
+  const [recordToDelete, setRecordToDelete] = useState<HistoryRecord | null>(null)
   const [selectedItem, setSelectedItem] = useState("")
   const [itemSearch, setItemSearch] = useState("")
   const [itemPopoverOpen, setItemPopoverOpen] = useState(false)
@@ -79,14 +83,53 @@ export default function StockInPage() {
       .select("*")
       .order("created_at", { ascending: false })
 
+    const { data: doDetails } = await supabase
+      .from("delivery_order_details")
+      .select("id, item_id, qty, delivery_order_id")
+    const { data: doOrders } = await supabase
+      .from("delivery_orders")
+      .select("id, do_number, po_number, created_at")
+    const doMap = new Map((doOrders ?? []).map((o: any) => [o.id, o]))
+
     if (itemsData) setItems(itemsData)
+    const allRecords: HistoryRecord[] = []
+
     if (recordsData) {
-      const mapped = recordsData.map((r: any) => ({
-        ...r,
-        items: itemsData?.find((i: any) => i.id === r.item_id) ?? null,
-      }))
-      setRecords(mapped as unknown as StockInRecord[])
+      for (const r of recordsData) {
+        allRecords.push({
+          id: r.id,
+          item_id: r.item_id,
+          qty: r.qty,
+          tipe: "Stock Masuk",
+          note: r.note,
+          created_at: r.created_at,
+          created_by: r.created_by,
+          do_number: null,
+          po_number: null,
+          items: itemsData?.find((i: any) => i.id === r.item_id) ?? null,
+        })
+      }
     }
+
+    if (doDetails) {
+      for (const d of doDetails) {
+        const order = doMap.get(d.delivery_order_id)
+        allRecords.push({
+          id: `do-${d.id}`,
+          item_id: d.item_id,
+          qty: -d.qty,
+          tipe: "Delivery Order",
+          note: null,
+          created_at: order?.created_at ?? d.created_at,
+          do_number: order?.do_number ?? null,
+          po_number: order?.po_number ?? null,
+          items: itemsData?.find((i: any) => i.id === d.item_id) ?? null,
+        })
+      }
+    }
+
+    allRecords.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    setRecords(allRecords)
   }
 
   useEffect(() => {
@@ -127,21 +170,22 @@ export default function StockInPage() {
     setDialogOpen(true)
   }
 
-  const openEditDialog = (record: StockInRecord) => {
+  const openEditDialog = (record: HistoryRecord) => {
+    if (record.tipe !== "Stock Masuk") return
     setEditRecord(record)
     setSelectedItem(record.item_id)
-    setQty(String(record.qty))
+    setQty(String(Math.abs(record.qty)))
     setNote(record.note || "")
     setDialogOpen(true)
   }
 
-  const openDeleteDialog = (record: StockInRecord) => {
+  const openDeleteDialog = (record: HistoryRecord) => {
     setRecordToDelete(record)
     setDeleteDialogOpen(true)
   }
 
   const handleDelete = async () => {
-    if (!recordToDelete) return
+    if (!recordToDelete || recordToDelete.tipe !== "Stock Masuk") return
 
     setDeleting(true)
     const record = recordToDelete
@@ -154,7 +198,7 @@ export default function StockInPage() {
         .single()
 
       if (itemData) {
-        const newStock = Math.max(0, itemData.current_stock - record.qty)
+        const newStock = Math.max(0, itemData.current_stock - Math.abs(record.qty))
         await supabase
           .from("mst_items")
           .update({ current_stock: newStock })
@@ -345,7 +389,7 @@ export default function StockInPage() {
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <History className="h-5 w-5" />
-                  History Stock Masuk
+                  History
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -353,9 +397,12 @@ export default function StockInPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Qty Masuk</TableHead>
-                        <TableHead>Current Stock</TableHead>
+                        <TableHead>NO DO</TableHead>
+                        <TableHead>NO PO</TableHead>
                         <TableHead>Keterangan</TableHead>
+                        <TableHead className="text-green-600">QTY In</TableHead>
+                        <TableHead className="text-red-600">QTY Out</TableHead>
+                        <TableHead>Tipe</TableHead>
                         <TableHead>Tanggal</TableHead>
                         {user?.role !== "user" && <TableHead className="w-24">Aksi</TableHead>}
                       </TableRow>
@@ -363,43 +410,54 @@ export default function StockInPage() {
                     <TableBody>
                       {selectedItemRecords.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={user?.role !== "user" ? 5 : 4} className="h-24 text-center text-muted-foreground">
-                            Belum ada riwayat stock masuk
+                          <TableCell colSpan={user?.role !== "user" ? 8 : 7} className="h-24 text-center text-muted-foreground">
+                            Belum ada riwayat transaksi
                           </TableCell>
                         </TableRow>
                       ) : (
                         selectedItemRecords.map((r) => (
                           <TableRow key={r.id}>
-                            <TableCell className="text-green-600 font-semibold">
-                              +{r.qty}
-                            </TableCell>
-                            <TableCell className="tabular-nums">
-                              {r.items?.current_stock ?? "-"}
-                            </TableCell>
+                            <TableCell>{r.do_number ?? "-"}</TableCell>
+                            <TableCell>{r.po_number ?? "-"}</TableCell>
                             <TableCell>{r.note ?? "-"}</TableCell>
+                            <TableCell className="text-green-600 font-semibold">
+                              {r.tipe === "Stock Masuk" ? `+${r.qty}` : ""}
+                            </TableCell>
+                            <TableCell className="text-red-600 font-semibold">
+                              {r.tipe === "Delivery Order" ? `${Math.abs(r.qty)}` : ""}
+                            </TableCell>
+                            <TableCell>
+                              {r.tipe === "Stock Masuk" ? (
+                                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-300">Stock Masuk</Badge>
+                              ) : (
+                                <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-300">Delivery Order</Badge>
+                              )}
+                            </TableCell>
                             <TableCell className="whitespace-nowrap">
                               {new Date(r.created_at).toLocaleString("id-ID")}
                             </TableCell>
                             {user?.role !== "user" && (
                               <TableCell>
-                                <div className="flex items-center gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8"
-                                    onClick={() => openEditDialog(r)}
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-destructive"
-                                    onClick={() => openDeleteDialog(r)}
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </Button>
-                                </div>
+                                {r.tipe === "Stock Masuk" && (
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={() => openEditDialog(r)}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-destructive"
+                                      onClick={() => openDeleteDialog(r)}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                )}
                               </TableCell>
                             )}
                           </TableRow>
