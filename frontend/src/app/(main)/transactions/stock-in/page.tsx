@@ -17,6 +17,8 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -59,11 +61,14 @@ export default function StockInPage() {
   const [records, setRecords] = useState<StockInRecord[]>([])
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [editRecord, setEditRecord] = useState<StockInRecord | null>(null)
+  const [recordToDelete, setRecordToDelete] = useState<StockInRecord | null>(null)
   const [selectedItem, setSelectedItem] = useState("")
   const [qty, setQty] = useState("")
   const [note, setNote] = useState("")
   const [loading, setLoading] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const { user } = useAuth()
   const supabase = useMemo(() => createClient(), [])
 
@@ -133,35 +138,48 @@ export default function StockInPage() {
     setDialogOpen(true)
   }
 
-  const handleDelete = async (record: StockInRecord) => {
-    if (!confirm("Yakin ingin menghapus data stock masuk ini?")) return
+  const openDeleteDialog = (record: StockInRecord) => {
+    setRecordToDelete(record)
+    setDeleteDialogOpen(true)
+  }
 
-    const { data: itemData } = await supabase
-      .from("mst_items")
-      .select("current_stock")
-      .eq("id", record.item_id)
-      .single()
+  const handleDelete = async () => {
+    if (!recordToDelete) return
 
-    if (itemData) {
-      const newStock = Math.max(0, itemData.current_stock - record.qty)
-      await supabase
+    setDeleting(true)
+    const record = recordToDelete
+
+    try {
+      const { data: itemData } = await supabase
         .from("mst_items")
-        .update({ current_stock: newStock })
+        .select("current_stock")
         .eq("id", record.item_id)
-    }
+        .single()
 
-    const { error } = await supabase
-      .from("stock_in")
-      .delete()
-      .eq("id", record.id)
+      if (itemData) {
+        const newStock = Math.max(0, itemData.current_stock - record.qty)
+        await supabase
+          .from("mst_items")
+          .update({ current_stock: newStock })
+          .eq("id", record.item_id)
+      }
 
-    if (error) {
+      const { error } = await supabase
+        .from("stock_in")
+        .delete()
+        .eq("id", record.id)
+
+      if (error) throw error
+
+      toast.success("Data stock masuk berhasil dihapus")
+      await fetchData()
+    } catch (error) {
       toast.error("Gagal menghapus data stock masuk")
-      return
+    } finally {
+      setDeleting(false)
+      setDeleteDialogOpen(false)
+      setRecordToDelete(null)
     }
-
-    toast.success("Data stock masuk berhasil dihapus")
-    fetchData()
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -377,7 +395,7 @@ export default function StockInPage() {
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8 text-destructive"
-                                  onClick={() => handleDelete(r)}
+                                  onClick={() => openDeleteDialog(r)}
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
@@ -394,6 +412,33 @@ export default function StockInPage() {
           </>
         )
       })()}
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Konfirmasi Hapus</DialogTitle>
+            <DialogDescription>
+              Apakah Anda yakin ingin menghapus data stock masuk ini?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+              disabled={deleting}
+            >
+              Batal
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={deleting}
+            >
+              {deleting ? "Menghapus..." : "Hapus"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg max-w-full max-h-[90dvh] p-4 sm:p-6 overflow-y-auto">

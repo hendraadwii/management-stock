@@ -14,6 +14,8 @@ import { getIcon } from "@/lib/icon-map"
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -25,6 +27,9 @@ export default function RolesPage() {
   const [roles, setRoles] = useState<Role[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmAction, setConfirmAction] = useState<"edit" | "delete" | null>(null)
+  const [pendingRole, setPendingRole] = useState<Role | null>(null)
   const [editItem, setEditItem] = useState<Role | null>(null)
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
@@ -147,15 +152,29 @@ export default function RolesPage() {
   }
 
   const handleEdit = (item: Role) => {
-    if (!confirm("Yakin ingin mengedit role ini?")) return
-    setEditItem(item)
-    setName(item.name)
-    setDescription(item.description ?? "")
-    setOpen(true)
+    setPendingRole(item)
+    setConfirmAction("edit")
+    setConfirmOpen(true)
+  }
+
+  const confirmActionHandler = () => {
+    if (!pendingRole || !confirmAction) return
+
+    if (confirmAction === "edit") {
+      setEditItem(pendingRole)
+      setName(pendingRole.name)
+      setDescription(pendingRole.description ?? "")
+      setOpen(true)
+    } else {
+      handleDelete(pendingRole.id)
+    }
+
+    setConfirmOpen(false)
+    setConfirmAction(null)
+    setPendingRole(null)
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Yakin ingin menghapus role ini?")) return
     const { error } = await supabase.from("mst_roles").delete().eq("id", id)
 
     if (error) {
@@ -198,7 +217,11 @@ export default function RolesPage() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => handleDelete(row.original.id)}
+            onClick={() => {
+              setPendingRole(row.original)
+              setConfirmAction("delete")
+              setConfirmOpen(true)
+            }}
             title="Hapus Role"
           >
             <Trash2 className="h-4 w-4 text-destructive" />
@@ -264,6 +287,41 @@ export default function RolesPage() {
           </DialogContent>
         </Dialog>
       </div>
+      <Dialog
+        open={confirmOpen}
+        onOpenChange={(open) => {
+          setConfirmOpen(open)
+          if (!open) {
+            setConfirmAction(null)
+            setPendingRole(null)
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {confirmAction === "edit" ? "Konfirmasi Edit" : "Konfirmasi Hapus"}
+            </DialogTitle>
+            <DialogDescription>
+              {confirmAction === "edit"
+                ? `Anda yakin ingin mengedit role ${pendingRole?.name}?`
+                : `Anda yakin ingin menghapus role ${pendingRole?.name}?`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+              Batal
+            </Button>
+            <Button
+              variant={confirmAction === "delete" ? "destructive" : "default"}
+              onClick={confirmActionHandler}
+            >
+              {confirmAction === "delete" ? "Hapus" : "Ya, Edit"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <DataTable
         columns={columns}
         data={roles}

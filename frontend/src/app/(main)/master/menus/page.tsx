@@ -16,6 +16,8 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -42,6 +44,9 @@ export default function MenusPage() {
   const [menus, setMenus] = useState<Menu[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmAction, setConfirmAction] = useState<"edit" | "delete" | null>(null)
+  const [pendingMenu, setPendingMenu] = useState<Menu | null>(null)
   const [editItem, setEditItem] = useState<Menu | null>(null)
   const [name, setName] = useState("")
   const [url, setUrl] = useState("")
@@ -120,18 +125,32 @@ export default function MenusPage() {
   }
 
   const handleEdit = (item: Menu) => {
-    if (!confirm("Yakin ingin mengedit menu ini?")) return
-    setEditItem(item)
-    setName(item.name)
-    setUrl(item.url ?? "")
-    setIcon(item.icon ?? "")
-    setParentId(item.parent_id ?? "")
-    setSortOrder(String(item.sort_order))
-    setOpen(true)
+    setPendingMenu(item)
+    setConfirmAction("edit")
+    setConfirmOpen(true)
+  }
+
+  const confirmActionHandler = () => {
+    if (!pendingMenu || !confirmAction) return
+
+    if (confirmAction === "edit") {
+      setEditItem(pendingMenu)
+      setName(pendingMenu.name)
+      setUrl(pendingMenu.url ?? "")
+      setIcon(pendingMenu.icon ?? "")
+      setParentId(pendingMenu.parent_id ?? "")
+      setSortOrder(String(pendingMenu.sort_order))
+      setOpen(true)
+    } else {
+      handleDelete(pendingMenu.id)
+    }
+
+    setConfirmOpen(false)
+    setConfirmAction(null)
+    setPendingMenu(null)
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Yakin ingin menghapus menu ini?")) return
     const children = getChildren(id)
     if (children.length > 0) {
       const childNames = children.map((c) => c.name).join(", ")
@@ -245,6 +264,41 @@ export default function MenusPage() {
         </Dialog>
       </div>
 
+      <Dialog
+        open={confirmOpen}
+        onOpenChange={(open) => {
+          setConfirmOpen(open)
+          if (!open) {
+            setConfirmAction(null)
+            setPendingMenu(null)
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {confirmAction === "edit" ? "Konfirmasi Edit" : "Konfirmasi Hapus"}
+            </DialogTitle>
+            <DialogDescription>
+              {confirmAction === "edit"
+                ? `Anda yakin ingin mengedit menu ${pendingMenu?.name}?`
+                : `Anda yakin ingin menghapus menu ${pendingMenu?.name}?`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+              Batal
+            </Button>
+            <Button
+              variant={confirmAction === "delete" ? "destructive" : "default"}
+              onClick={confirmActionHandler}
+            >
+              {confirmAction === "delete" ? "Hapus" : "Ya, Edit"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="rounded-md border overflow-x-auto">
         <Table className="min-w-[600px]">
           <TableHeader>
@@ -284,7 +338,11 @@ export default function MenusPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleDelete(menu.id)}
+                        onClick={() => {
+                          setPendingMenu(menu)
+                          setConfirmAction("delete")
+                          setConfirmOpen(true)
+                        }}
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
@@ -312,7 +370,11 @@ export default function MenusPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => handleDelete(child.id)}
+                          onClick={() => {
+                            setPendingMenu(child)
+                            setConfirmAction("delete")
+                            setConfirmOpen(true)
+                          }}
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>

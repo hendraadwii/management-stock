@@ -11,10 +11,11 @@ import { Label } from "@/components/ui/label"
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogDescription,
 } from "@/components/ui/dialog"
 import { Plus, Trash2, Pencil, Package } from "lucide-react"
 import { toast } from "sonner"
@@ -24,6 +25,8 @@ export default function ItemsPage() {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Item | null>(null)
+  const [editConfirmOpen, setEditConfirmOpen] = useState(false)
+  const [pendingEditItem, setPendingEditItem] = useState<Item | null>(null)
   const [editItem, setEditItem] = useState<Item | null>(null)
   const [partNumber, setPartNumber] = useState("")
   const [category, setCategory] = useState("")
@@ -108,11 +111,19 @@ export default function ItemsPage() {
   }
 
   const handleEdit = (item: Item) => {
-    if (!confirm("Yakin ingin mengedit item ini?")) return
-    setEditItem(item)
-    setPartNumber(item.part_number)
-    setCategory(item.category ?? "")
-    setRack(item.rack ?? "")
+    setPendingEditItem(item)
+    setEditConfirmOpen(true)
+  }
+
+  const confirmEdit = () => {
+    if (!pendingEditItem) return
+
+    setEditItem(pendingEditItem)
+    setPartNumber(pendingEditItem.part_number)
+    setCategory(pendingEditItem.category ?? "")
+    setRack(pendingEditItem.rack ?? "")
+    setEditConfirmOpen(false)
+    setPendingEditItem(null)
     setOpen(true)
   }
 
@@ -250,6 +261,36 @@ export default function ItemsPage() {
       </div>
 
       <Dialog
+        open={editConfirmOpen}
+        onOpenChange={(open) => {
+          setEditConfirmOpen(open)
+          if (!open) setPendingEditItem(null)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Konfirmasi Edit</DialogTitle>
+            <DialogDescription>
+              Anda yakin ingin mengedit item{" "}
+              <strong>{pendingEditItem?.part_number}</strong>?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditConfirmOpen(false)
+                setPendingEditItem(null)
+              }}
+            >
+              Batal
+            </Button>
+            <Button onClick={confirmEdit}>Ya, Edit</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
       >
@@ -262,7 +303,7 @@ export default function ItemsPage() {
               dapat dibatalkan.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-end gap-2">
+          <DialogFooter>
             <Button
               variant="outline"
               onClick={() => setDeleteTarget(null)}
@@ -275,7 +316,7 @@ export default function ItemsPage() {
             >
               Hapus
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

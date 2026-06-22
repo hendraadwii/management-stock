@@ -17,6 +17,8 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -63,6 +65,8 @@ export default function DeliveryOrderPage() {
   const [doList, setDoList] = useState<DeliveryOrder[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmAction, setConfirmAction] = useState<"edit" | "submit" | "delete" | null>(null)
   const [editDo, setEditDo] = useState<DeliveryOrder | null>(null)
   const [poNumber, setPoNumber] = useState("")
   const [shipping, setShipping] = useState("")
@@ -203,7 +207,6 @@ export default function DeliveryOrderPage() {
       toast.error("Tidak bisa mengedit DO yang sudah disubmit")
       return
     }
-    if (!confirm("Yakin ingin mengedit data ini?")) return
 
     setEditDo(doRecord)
     setPoNumber(doRecord.po_number)
@@ -227,7 +230,6 @@ export default function DeliveryOrderPage() {
 
   const handleDelete = async () => {
     if (!selectedId) return
-    if (!confirm("Yakin ingin menghapus Delivery Order ini?")) return
 
     const doRecord = doList.find((d: any) => d.id === selectedId)
     if (!doRecord) return
@@ -275,7 +277,6 @@ export default function DeliveryOrderPage() {
     const doRecord = doList.find((d: any) => d.id === selectedId)
     if (!doRecord) return
     if ((doRecord as any).status !== "draft") return
-    if (!confirm("Yakin ingin submit Delivery Order ini? Stok akan dikurangi.")) return
 
     setLoading(true)
     const details = (doRecord as any).delivery_order_details || []
@@ -316,6 +317,42 @@ export default function DeliveryOrderPage() {
     setLoading(false)
     fetchData()
   }
+
+  const openConfirmDialog = (action: "edit" | "submit" | "delete") => {
+    setConfirmAction(action)
+    setConfirmOpen(true)
+  }
+
+  const handleConfirmAction = async () => {
+    if (!confirmAction) return
+
+    try {
+      if (confirmAction === "edit") {
+        await openEditDialog()
+      } else if (confirmAction === "submit") {
+        await handleSubmitDO()
+      } else if (confirmAction === "delete") {
+        await handleDelete()
+      }
+    } finally {
+      setConfirmOpen(false)
+      setConfirmAction(null)
+    }
+  }
+
+  const confirmTitle =
+    confirmAction === "edit"
+      ? "Konfirmasi Edit"
+      : confirmAction === "submit"
+        ? "Konfirmasi Submit"
+        : "Konfirmasi Hapus"
+
+  const confirmDescription =
+    confirmAction === "edit"
+      ? "Apakah Anda yakin ingin mengedit Delivery Order ini?"
+      : confirmAction === "submit"
+        ? "Apakah Anda yakin ingin submit Delivery Order ini? Stok akan dikurangi."
+        : "Apakah Anda yakin ingin menghapus Delivery Order ini?"
 
   const handleExport = async () => {
     if (!selectedId) return
@@ -760,7 +797,7 @@ export default function DeliveryOrderPage() {
           <Button
             variant="outline"
             disabled={!selectedId || isSubmitted}
-            onClick={openEditDialog}
+            onClick={() => openConfirmDialog("edit")}
           >
             <Pencil className="mr-2 h-4 w-4" />
             Edit Data
@@ -769,7 +806,7 @@ export default function DeliveryOrderPage() {
             <Button
               variant="default"
               disabled={!selectedId}
-              onClick={handleSubmitDO}
+              onClick={() => openConfirmDialog("submit")}
             >
               <CheckCircle className="mr-2 h-4 w-4" />
               Submit
@@ -778,7 +815,7 @@ export default function DeliveryOrderPage() {
           <Button
             variant="destructive"
             disabled={!selectedId}
-            onClick={handleDelete}
+            onClick={() => openConfirmDialog("delete")}
           >
             <Trash2 className="mr-2 h-4 w-4" />
             Delete Data
@@ -884,6 +921,23 @@ export default function DeliveryOrderPage() {
           </Card>
         )
       })()}
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{confirmTitle}</DialogTitle>
+            <DialogDescription>{confirmDescription}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+              Batal
+            </Button>
+            <Button onClick={handleConfirmAction}>
+              Ya, Lanjutkan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-3xl max-w-full max-h-[90dvh] p-4 sm:p-6 overflow-y-auto">

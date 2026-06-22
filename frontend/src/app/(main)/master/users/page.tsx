@@ -18,6 +18,8 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -30,6 +32,9 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmAction, setConfirmAction] = useState<"edit" | "delete" | null>(null)
+  const [pendingUser, setPendingUser] = useState<User | null>(null)
   const [editItem, setEditItem] = useState<User | null>(null)
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
@@ -131,16 +136,30 @@ export default function UsersPage() {
   }
 
   const handleEdit = async (item: User) => {
-    if (!confirm("Yakin ingin mengedit user ini?")) return
-    setEditItem(item)
-    setUsername(item.username)
-    setPassword("")
-    setRole(item.role)
-    setOpen(true)
+    setPendingUser(item)
+    setConfirmAction("edit")
+    setConfirmOpen(true)
+  }
+
+  const confirmActionHandler = () => {
+    if (!pendingUser || !confirmAction) return
+
+    if (confirmAction === "edit") {
+      setEditItem(pendingUser)
+      setUsername(pendingUser.username)
+      setPassword("")
+      setRole(pendingUser.role)
+      setOpen(true)
+    } else {
+      handleDelete(pendingUser.id)
+    }
+
+    setConfirmOpen(false)
+    setConfirmAction(null)
+    setPendingUser(null)
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Yakin ingin menghapus user ini?")) return
     const { error } = await supabase.from("mst_users").delete().eq("id", id)
 
     if (error) {
@@ -193,7 +212,11 @@ export default function UsersPage() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => handleDelete(row.original.id)}
+            onClick={() => {
+              setPendingUser(row.original)
+              setConfirmAction("delete")
+              setConfirmOpen(true)
+            }}
           >
             <Trash2 className="h-4 w-4 text-destructive" />
           </Button>
@@ -288,6 +311,41 @@ export default function UsersPage() {
           </DialogContent>
         </Dialog>
       </div>
+      <Dialog
+        open={confirmOpen}
+        onOpenChange={(open) => {
+          setConfirmOpen(open)
+          if (!open) {
+            setConfirmAction(null)
+            setPendingUser(null)
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {confirmAction === "edit" ? "Konfirmasi Edit" : "Konfirmasi Hapus"}
+            </DialogTitle>
+            <DialogDescription>
+              {confirmAction === "edit"
+                ? `Anda yakin ingin mengedit user ${pendingUser?.username}?`
+                : `Anda yakin ingin menghapus user ${pendingUser?.username}?`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+              Batal
+            </Button>
+            <Button
+              variant={confirmAction === "delete" ? "destructive" : "default"}
+              onClick={confirmActionHandler}
+            >
+              {confirmAction === "delete" ? "Hapus" : "Ya, Edit"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <DataTable
         columns={columns}
         data={users}
