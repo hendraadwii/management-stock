@@ -17,13 +17,13 @@ export function middleware(request: NextRequest) {
 
       if (pathname === "/login") {
         const url = request.nextUrl.clone()
-        url.pathname = isUser ? "/history" : "/dashboard"
+        url.pathname = isUser ? "/transactions/stock" : "/dashboard"
         return NextResponse.redirect(url)
       }
 
-      if (isUser && pathname !== "/history" && pathname !== "/") {
+      if (isUser && pathname !== "/transactions/stock" && pathname !== "/") {
         const url = request.nextUrl.clone()
-        url.pathname = "/history"
+        url.pathname = "/transactions/stock"
         return NextResponse.redirect(url)
       }
     } catch {

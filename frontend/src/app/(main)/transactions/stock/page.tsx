@@ -79,7 +79,7 @@ export default function StockInPage() {
       .order("part_number")
 
     const { data: recordsData } = await supabase
-      .from("stock_in")
+      .from("trx_stock")
       .select("*")
       .order("created_at", { ascending: false })
 
@@ -165,7 +165,7 @@ export default function StockInPage() {
       }
 
       const { error } = await supabase
-        .from("stock_in")
+        .from("trx_stock")
         .delete()
         .eq("id", record.id)
 
@@ -198,7 +198,7 @@ export default function StockInPage() {
       const oldQty = editRecord.qty
 
       const { error } = await supabase
-        .from("stock_in")
+        .from("trx_stock")
         .update({
           qty: qtyNum,
           note: normalizedNote,
@@ -228,7 +228,7 @@ export default function StockInPage() {
       toast.success("Stock masuk berhasil diupdate")
     } else {
       const { error: stockInError } = await supabase
-        .from("stock_in")
+        .from("trx_stock")
         .insert({
           item_id: selectedItem,
           qty: qtyNum,

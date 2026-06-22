@@ -49,7 +49,7 @@ export default function LoginPage() {
     })
 
     toast.success("Login berhasil")
-    router.push(user.role === "user" ? "/history" : "/dashboard")
+    router.push(user.role === "user" ? "/transactions/stock" : "/dashboard")
   }
 
   return (
