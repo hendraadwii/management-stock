@@ -372,22 +372,22 @@ export default function StockInPage() {
             Catat barang masuk ke gudang
           </p>
         </div>
-        {user?.role !== "user" && (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant={lowStockOnly ? "default" : "outline"}
-              onClick={() => setLowStockOnly((v) => !v)}
-              className={lowStockOnly ? "bg-amber-500 hover:bg-amber-600 border-amber-500" : ""}
-            >
-              <AlertTriangle className="mr-2 h-4 w-4" />
-              Stok Menipis
-            </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant={lowStockOnly ? "default" : "outline"}
+            onClick={() => setLowStockOnly((v) => !v)}
+            className={lowStockOnly ? "bg-amber-500 hover:bg-amber-600 border-amber-500" : ""}
+          >
+            <AlertTriangle className="mr-2 h-4 w-4" />
+            Stok Menipis
+          </Button>
+          {user?.role !== "user" && (
             <Button onClick={openNewDialog}>
               <Plus className="mr-2 h-4 w-4" />
               New Data
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <DataTable

@@ -18,6 +18,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Plus, Trash2, Pencil, Package } from "lucide-react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { toast } from "sonner"
 
 export default function ItemsPage() {
@@ -31,6 +38,7 @@ export default function ItemsPage() {
   const [partNumber, setPartNumber] = useState("")
   const [category, setCategory] = useState("")
   const [rack, setRack] = useState("")
+  const [uom, setUom] = useState("")
   const supabase = useMemo(() => createClient(), [])
 
   const fetchItems = async () => {
@@ -52,6 +60,7 @@ export default function ItemsPage() {
     setPartNumber("")
     setCategory("")
     setRack("")
+    setUom("")
     setEditItem(null)
   }
 
@@ -70,6 +79,7 @@ export default function ItemsPage() {
           part_number: partNumber.trim(),
           category: category.trim() || null,
           rack: rack.trim() || null,
+          uom: uom || null,
         })
         .eq("id", editItem.id)
 
@@ -95,6 +105,7 @@ export default function ItemsPage() {
         part_number: partNumber.trim(),
         category: category.trim() || null,
         rack: rack.trim() || null,
+        uom: uom || null,
       })
 
       if (error) {
@@ -122,6 +133,7 @@ export default function ItemsPage() {
     setPartNumber(pendingEditItem.part_number)
     setCategory(pendingEditItem.category ?? "")
     setRack(pendingEditItem.rack ?? "")
+    setUom((pendingEditItem as any).uom ?? "")
     setEditConfirmOpen(false)
     setPendingEditItem(null)
     setOpen(true)
@@ -185,6 +197,11 @@ export default function ItemsPage() {
       accessorKey: "rack",
       header: "Rak",
       cell: ({ row }) => row.original.rack ?? "-",
+    },
+    {
+      accessorKey: "uom",
+      header: "UOM",
+      cell: ({ row }) => (row.original as any).uom ?? "-",
     },
     {
       id: "actions",
@@ -266,6 +283,19 @@ export default function ItemsPage() {
                   onChange={(e) => setRack(e.target.value)}
                   placeholder="Masukkan kode rak"
                 />
+              </div>
+              <div className="space-y-2">
+                <Label>UOM</Label>
+                <Select value={uom} onValueChange={(v) => setUom(v ?? "")}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih satuan" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PCS">PCS</SelectItem>
+                    <SelectItem value="METER">METER</SelectItem>
+                    <SelectItem value="SET">SET</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <Button type="submit" className="w-full">
                 {editItem ? "Update" : "Simpan"}
