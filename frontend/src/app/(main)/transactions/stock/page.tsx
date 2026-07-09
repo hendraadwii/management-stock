@@ -393,6 +393,14 @@ export default function StockInPage() {
       header: "UOM",
       cell: ({ row }) => (row.original.item as any).uom ?? "-",
     },
+    {
+      id: "created_at",
+      header: "Created At",
+      cell: ({ row }) => {
+        const val = (row.original.item as any).created_at
+        return val ? new Date(val).toLocaleString("id-ID") : "-"
+      },
+    },
     ...(user?.role === "admin"
       ? [{
           id: "actions",
