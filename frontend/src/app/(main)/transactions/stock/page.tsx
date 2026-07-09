@@ -71,6 +71,8 @@ export default function StockInPage() {
   const [loading, setLoading] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [lowStockOnly, setLowStockOnly] = useState(false)
+  const [deleteItemTarget, setDeleteItemTarget] = useState<GroupedItem | null>(null)
+  const [deletingItem, setDeletingItem] = useState(false)
   const { user } = useAuth()
   const supabase = useMemo(() => createClient(), [])
 
@@ -314,6 +316,33 @@ export default function StockInPage() {
     fetchData()
   }
 
+  const handleDeleteItem = async () => {
+    if (!deleteItemTarget) return
+    setDeletingItem(true)
+    try {
+      const { error } = await supabase
+        .from("trx_stock")
+        .delete()
+        .eq("item_id", deleteItemTarget.item.id)
+
+      if (error) throw error
+
+      // Reset current_stock ke 0
+      await supabase
+        .from("mst_items")
+        .update({ current_stock: 0 })
+        .eq("id", deleteItemTarget.item.id)
+
+      toast.success("Semua data stock berhasil dihapus")
+      await fetchData()
+    } catch {
+      toast.error("Gagal menghapus data stock")
+    } finally {
+      setDeletingItem(false)
+      setDeleteItemTarget(null)
+    }
+  }
+
   const columns: ColumnDef<GroupedItem>[] = [
     {
       id: "select",
@@ -364,6 +393,22 @@ export default function StockInPage() {
       header: "UOM",
       cell: ({ row }) => (row.original.item as any).uom ?? "-",
     },
+    ...(user?.role === "admin"
+      ? [{
+          id: "actions",
+          header: "",
+          cell: ({ row }: { row: any }) => (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-destructive hover:text-destructive"
+              onClick={() => setDeleteItemTarget(row.original)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          ),
+        }]
+      : []),
   ]
 
   return (
@@ -521,6 +566,34 @@ export default function StockInPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!deleteItemTarget} onOpenChange={(open) => { if (!open) setDeleteItemTarget(null) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Konfirmasi Hapus Data Stock</DialogTitle>
+            <DialogDescription>
+              Yakin ingin menghapus data stock untuk item{" "}
+              <strong>{deleteItemTarget?.item.part_number}</strong>? Seluruh riwayat stock masuk item ini akan dihapus dan current stock akan direset ke 0. Tindakan ini tidak dapat dibatalkan.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteItemTarget(null)}
+              disabled={deletingItem}
+            >
+              Batal
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteItem}
+              disabled={deletingItem}
+            >
+              {deletingItem ? "Menghapus..." : "Hapus"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg max-w-full max-h-[90dvh] p-4 sm:p-6 overflow-y-auto">
           <DialogHeader>
@@ -552,53 +625,68 @@ export default function StockInPage() {
                   className="w-full"
                 />
                 {itemPopoverOpen && (
-                  <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border bg-popover shadow-md min-w-0">
-                        <table className="w-full table-fixed text-xs">
-                          <thead>
-                            <tr className="text-muted-foreground border-b">
-                              <th className="truncate px-4 py-2 font-medium text-left border-r w-[45%]">Part Number</th>
-                              <th className="truncate px-4 py-2 font-medium text-left border-r w-[25%]">Category</th>
-                              <th className="truncate px-4 py-2 font-medium text-left border-r w-[15%]">Rak</th>
-                              <th className="px-4 py-2 font-medium text-right w-[15%]">Stock</th>
-                            </tr>
-                          </thead>
-                      <tbody>
-                        {(() => {
-                          const filtered = items.filter((item) =>
-                            !itemSearch.trim()
-                              ? true
-                              : item.part_number.toLowerCase().includes(itemSearch.toLowerCase()) ||
-                                (item.category ?? "").toLowerCase().includes(itemSearch.toLowerCase())
-                          )
-                          return filtered.length === 0 ? (
-                            <tr>
-                              <td colSpan={4} className="px-3 py-6 text-center text-sm text-muted-foreground">
-                                Barang tidak ditemukan
-                              </td>
-                            </tr>
-                          ) : (
-                            filtered.map((item) => (
-                              <tr
-                                key={item.id}
-                                className="text-sm hover:bg-accent aria-selected:bg-accent cursor-pointer"
-                                aria-selected={selectedItem === item.id}
-                                onMouseDown={(e) => {
-                                  e.preventDefault()
-                                  setSelectedItem(item.id)
-                                  setItemSearch("")
-                                  setItemPopoverOpen(false)
-                                }}
-                              >
-                                    <td className="truncate px-4 py-2.5 border-r border-b">{item.part_number}</td>
-                                    <td className="truncate px-4 py-2.5 border-r border-b">{item.category ?? "-"}</td>
-                                    <td className="truncate px-4 py-2.5 border-r border-b">{item.rack ?? "-"}</td>
-                                    <td className="tabular-nums text-right px-4 py-2.5 border-b">{item.current_stock}</td>
+                  <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border bg-popover shadow-md overflow-hidden">
+                    <div className="overflow-auto max-h-[220px]">
+                      <table className="w-full text-xs">
+                        <thead className="sticky top-0 bg-popover z-10">
+                          <tr className="text-muted-foreground border-b">
+                            <th className="px-3 py-2 font-medium text-left border-r">Part Number</th>
+                            <th className="px-3 py-2 font-medium text-left border-r">Category</th>
+                            <th className="px-3 py-2 font-medium text-left border-r">Rak</th>
+                            <th className="px-3 py-2 font-medium text-left border-r">UOM</th>
+                            <th className="px-3 py-2 font-medium text-right">Stock</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(() => {
+                            const isSearching = itemSearch.trim().length > 0
+                            const filtered = items.filter((item) =>
+                              !isSearching
+                                ? true
+                                : item.part_number.toLowerCase().includes(itemSearch.toLowerCase()) ||
+                                  (item.category ?? "").toLowerCase().includes(itemSearch.toLowerCase())
+                            )
+                            const displayed = isSearching ? filtered : filtered.slice(0, 5)
+                            return displayed.length === 0 ? (
+                              <tr>
+                                <td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">
+                                  Barang tidak ditemukan
+                                </td>
                               </tr>
-                            ))
-                          )
-                        })()}
-                      </tbody>
-                    </table>
+                            ) : (
+                              <>
+                                {displayed.map((item) => (
+                                  <tr
+                                    key={item.id}
+                                    className="hover:bg-accent cursor-pointer"
+                                    aria-selected={selectedItem === item.id}
+                                    onMouseDown={(e) => {
+                                      e.preventDefault()
+                                      setSelectedItem(item.id)
+                                      setItemSearch("")
+                                      setItemPopoverOpen(false)
+                                    }}
+                                  >
+                                    <td className="px-3 py-2.5 border-r border-b">{item.part_number}</td>
+                                    <td className="px-3 py-2.5 border-r border-b max-w-[120px] truncate">{item.category ?? "-"}</td>
+                                    <td className="px-3 py-2.5 border-r border-b">{item.rack ?? "-"}</td>
+                                    <td className="px-3 py-2.5 border-r border-b">{(item as any).uom ?? "-"}</td>
+                                    <td className="px-3 py-2.5 border-b text-right tabular-nums">{item.current_stock}</td>
+                                  </tr>
+                                ))}
+                                {!isSearching && filtered.length > 5 && (
+                                  <tr>
+                                    <td colSpan={5} className="px-3 py-2 text-center text-muted-foreground border-t bg-muted/30">
+                                      +{filtered.length - 5} data lainnya. Ketik untuk cari lebih spesifik.
+                                    </td>
+                                  </tr>
+                                )}
+                              </>
+                            )
+                          })()}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
               </div>
