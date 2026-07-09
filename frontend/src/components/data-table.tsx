@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { useState, useMemo } from "react"
+import { useState, useMemo, createContext } from "react"
 import { ChevronLeft, ChevronRight, Search } from "lucide-react"
 
 interface DataTableProps<TData, TValue> {
@@ -30,17 +30,38 @@ interface DataTableProps<TData, TValue> {
   searchPlaceholder?: string
 }
 
-function extractSearchValues(obj: unknown): string[] {
-  const values: string[] = []
-  if (!obj || typeof obj !== "object") return values
-  for (const val of Object.values(obj as Record<string, unknown>)) {
-    if (val && typeof val === "object" && !Array.isArray(val)) {
-      values.push(...extractSearchValues(val))
-    } else if (val != null) {
-      values.push(String(val).toLowerCase())
-    }
+/** Ambil nilai nested dari object berdasarkan dot-notation key, misal "item.part_number" */
+function getNestedValue(obj: unknown, key: string): string {
+  const parts = key.split(".")
+  let current: unknown = obj
+  for (const part of parts) {
+    if (current == null || typeof current !== "object") return ""
+    current = (current as Record<string, unknown>)[part]
   }
-  return values
+  return current != null ? String(current) : ""
+}
+
+/** Context untuk meneruskan keyword ke cell renderer */
+export const SearchKeywordContext = createContext<string>("")
+
+/** Highlight teks yang cocok dengan keyword */
+export function Highlight({ text, keyword }: { text: string; keyword: string }) {
+  if (!keyword.trim()) return <>{text}</>
+  const regex = new RegExp(`(${keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi")
+  const parts = text.split(regex)
+  return (
+    <>
+      {parts.map((part, i) =>
+        regex.test(part) ? (
+          <mark key={i} className="bg-yellow-200 text-yellow-900 rounded-sm px-0.5">
+            {part}
+          </mark>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </>
+  )
 }
 
 export function DataTable<TData, TValue>({
@@ -53,11 +74,11 @@ export function DataTable<TData, TValue>({
   const [globalFilter, setGlobalFilter] = useState("")
 
   const filteredData = useMemo(() => {
-    if (!searchKey && !globalFilter) return data
-    if (!globalFilter) return data
+    if (!searchKey || !globalFilter.trim()) return data
+    const keyword = globalFilter.toLowerCase()
     return data.filter((item) => {
-      const vals = extractSearchValues(item)
-      return vals.some((v) => v.includes(globalFilter.toLowerCase()))
+      const val = getNestedValue(item, searchKey).toLowerCase()
+      return val.includes(keyword)
     })
   }, [data, globalFilter, searchKey])
 
@@ -74,6 +95,7 @@ export function DataTable<TData, TValue>({
   })
 
   return (
+    <SearchKeywordContext.Provider value={globalFilter}>
     <div>
       {searchKey && (
         <div className="flex items-center py-4">
@@ -169,5 +191,6 @@ export function DataTable<TData, TValue>({
         </div>
       </div>
     </div>
+    </SearchKeywordContext.Provider>
   )
 }

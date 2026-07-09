@@ -32,6 +32,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { DataTable } from "@/components/data-table"
+import { Highlight, SearchKeywordContext } from "@/components/data-table"
 import { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
 import { Plus, Trash2, Pencil, ArrowRightLeft, History } from "lucide-react"
@@ -328,7 +329,13 @@ export default function StockInPage() {
     {
       accessorKey: "item.part_number",
       header: "Part Number",
-      cell: ({ row }) => row.original.item.part_number,
+      cell: ({ row }) => (
+        <SearchKeywordContext.Consumer>
+          {(keyword) => (
+            <Highlight text={row.original.item.part_number} keyword={keyword} />
+          )}
+        </SearchKeywordContext.Consumer>
+      ),
     },
     {
       accessorKey: "item.category",
@@ -340,11 +347,11 @@ export default function StockInPage() {
       header: "Rak",
       cell: ({ row }) => row.original.item.rack ?? "-",
     },
-    {
-      id: "total_qty",
-      header: "Total Qty Masuk",
-      cell: ({ row }) => row.original.totalQty,
-    },
+    // {
+    //   id: "total_qty",
+    //   header: "Total Qty Masuk",
+    //   cell: ({ row }) => row.original.totalQty,
+    // },
     {
       id: "current_stock",
       header: "Current Stock",
@@ -380,7 +387,7 @@ export default function StockInPage() {
         searchPlaceholder="Cari part number..."
       />
 
-      {selectedItemId && (() => {
+      {/* selectedItemId && (() => {
         const item = items.find((i) => i.id === selectedItemId)
         if (!item) return null
         return (
@@ -470,7 +477,7 @@ export default function StockInPage() {
             </Card>
           </>
         )
-      })()}
+      })()*/ null}
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="sm:max-w-md">
