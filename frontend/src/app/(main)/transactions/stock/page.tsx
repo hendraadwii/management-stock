@@ -35,7 +35,7 @@ import { DataTable } from "@/components/data-table"
 import { Highlight, SearchKeywordContext } from "@/components/data-table"
 import { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
-import { Plus, Trash2, Pencil, ArrowRightLeft, History } from "lucide-react"
+import { Plus, Trash2, Pencil, ArrowRightLeft, History, AlertTriangle } from "lucide-react"
 
 interface HistoryRecord {
   id: string
@@ -70,6 +70,7 @@ export default function StockInPage() {
   const [note, setNote] = useState("")
   const [loading, setLoading] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [lowStockOnly, setLowStockOnly] = useState(false)
   const { user } = useAuth()
   const supabase = useMemo(() => createClient(), [])
 
@@ -147,10 +148,11 @@ export default function StockInPage() {
       }
       map.get(item.id)!.totalQty += r.qty
     }
-    return Array.from(map.values()).sort((a, b) =>
+    const all = Array.from(map.values()).sort((a, b) =>
       a.item.part_number.localeCompare(b.item.part_number)
     )
-  }, [items, records])
+    return lowStockOnly ? all.filter((g) => g.item.current_stock < 200) : all
+  }, [items, records, lowStockOnly])
 
   const selectedItemRecords = useMemo(() => {
     if (!selectedItemId) return []
@@ -372,6 +374,14 @@ export default function StockInPage() {
         </div>
         {user?.role !== "user" && (
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant={lowStockOnly ? "default" : "outline"}
+              onClick={() => setLowStockOnly((v) => !v)}
+              className={lowStockOnly ? "bg-amber-500 hover:bg-amber-600 border-amber-500" : ""}
+            >
+              <AlertTriangle className="mr-2 h-4 w-4" />
+              Stok Menipis
+            </Button>
             <Button onClick={openNewDialog}>
               <Plus className="mr-2 h-4 w-4" />
               New Data
