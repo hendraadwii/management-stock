@@ -86,7 +86,7 @@ export default function StockInPage() {
 
     const { data: doDetails } = await supabase
       .from("delivery_order_details")
-      .select("id, item_id, qty, delivery_order_id")
+      .select("id, item_id, qty, delivery_order_id, created_at")
     const { data: doOrders } = await supabase
       .from("delivery_orders")
       .select("id, do_number, po_number, created_at")
