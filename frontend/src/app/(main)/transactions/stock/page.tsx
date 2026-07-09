@@ -359,6 +359,11 @@ export default function StockInPage() {
       header: "Current Stock",
       cell: ({ row }) => row.original.item.current_stock,
     },
+    {
+      id: "uom",
+      header: "UOM",
+      cell: ({ row }) => (row.original.item as any).uom ?? "-",
+    },
   ]
 
   return (
