@@ -368,7 +368,7 @@ export default function ItemsPage() {
       <DataTable
         columns={columns}
         data={items}
-        searchKey="part_number"
+        searchKey={["part_number", "category", "rack", "uom"]}
         searchPlaceholder="Cari item..."
       />
     </div>

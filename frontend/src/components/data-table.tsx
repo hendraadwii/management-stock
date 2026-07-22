@@ -26,7 +26,7 @@ import { ChevronLeft, ChevronRight, Search } from "lucide-react"
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
-  searchKey?: string
+  searchKey?: string | string[]
   searchPlaceholder?: string
 }
 
@@ -76,9 +76,12 @@ export function DataTable<TData, TValue>({
   const filteredData = useMemo(() => {
     if (!searchKey || !globalFilter.trim()) return data
     const keyword = globalFilter.toLowerCase()
+    const keys = Array.isArray(searchKey) ? searchKey : [searchKey]
     return data.filter((item) => {
-      const val = getNestedValue(item, searchKey).toLowerCase()
-      return val.includes(keyword)
+      return keys.some((key) => {
+        const val = getNestedValue(item, key).toLowerCase()
+        return val.includes(keyword)
+      })
     })
   }, [data, globalFilter, searchKey])
 

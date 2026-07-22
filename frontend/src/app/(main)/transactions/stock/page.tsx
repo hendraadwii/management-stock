@@ -451,7 +451,7 @@ export default function StockInPage() {
       <DataTable
         columns={columns}
         data={groupedData}
-        searchKey="item.part_number"
+        searchKey={["item.part_number", "item.category", "item.rack", "item.uom"]}
         searchPlaceholder="Cari part number..."
       />
 
