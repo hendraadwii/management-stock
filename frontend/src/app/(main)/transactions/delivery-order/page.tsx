@@ -423,7 +423,7 @@ export default function DeliveryOrderPage() {
     }
 
     const setCellStyle = (cell: ExcelJS.Cell, options: Partial<ExcelJS.Style> = {}) => {
-      cell.font = { size: 11, ...options.font }
+      cell.font = { size: 9, ...options.font }
       cell.alignment = {
         vertical: "middle",
         ...options.alignment,
@@ -434,10 +434,10 @@ export default function DeliveryOrderPage() {
     }
 
     const headerData = [
+      ["Customer", doRecord.customer_desc ?? "-"],
       ["No PO", doRecord.po_number],
       ["No DO", doRecord.do_number],
       ["Shipping", doRecord.shipping],
-      ["Customer", doRecord.customer_desc ?? "-"],
       ["Date", new Date(doRecord.created_at).toLocaleDateString("id-ID")],
     ]
 
@@ -447,12 +447,10 @@ export default function DeliveryOrderPage() {
       const valueCell = worksheet.getCell(r, 2)
       labelCell.value = row[0]
       valueCell.value = row[1]
-      setCellStyle(labelCell)
-      setCellStyle(valueCell)
-      if (r <= 4) {
-        labelCell.alignment = { horizontal: "left", vertical: "middle" }
-        valueCell.alignment = { horizontal: "left", vertical: "middle" }
-      }
+      setCellStyle(labelCell, { font: { size: 9, bold: true } })
+      setCellStyle(valueCell, { font: { size: 9 } })
+      labelCell.alignment = { horizontal: "left", vertical: "middle" }
+      valueCell.alignment = { horizontal: "left", vertical: "middle" }
     })
 
     const blankRow = 5
@@ -502,8 +500,11 @@ export default function DeliveryOrderPage() {
       }
     })
 
-    const labelRow = 11
-    const lineRow = 14
+    const dataEndRow = tableStartRow + details.length
+    const labelRow = dataEndRow + 2
+    const lineRow = labelRow + 3
+
+    const sigLineText = "____________________"
 
     const checker1Col = 2
     const checker1Label = worksheet.getCell(labelRow, checker1Col)
@@ -511,9 +512,9 @@ export default function DeliveryOrderPage() {
     checker1Label.font = { size: 11 }
     checker1Label.alignment = { horizontal: "left", vertical: "middle" }
     const checker1Line = worksheet.getCell(lineRow, checker1Col)
-    checker1Line.value = ""
-    checker1Line.alignment = { horizontal: "left", vertical: "middle" }
-    checker1Line.border = { top: {}, bottom: { style: "thin" }, left: {}, right: {} }
+    checker1Line.value = sigLineText
+    checker1Line.font = { size: 9 }
+    checker1Line.alignment = { horizontal: "left", vertical: "top" }
 
     const checker2Col = 3
     const checker2Label = worksheet.getCell(labelRow, checker2Col)
@@ -521,9 +522,9 @@ export default function DeliveryOrderPage() {
     checker2Label.font = { size: 11 }
     checker2Label.alignment = { horizontal: "left", vertical: "middle" }
     const checker2Line = worksheet.getCell(lineRow, checker2Col)
-    checker2Line.value = ""
-    checker2Line.alignment = { horizontal: "left", vertical: "middle" }
-    checker2Line.border = { top: {}, bottom: { style: "thin" }, left: {}, right: {} }
+    checker2Line.value = sigLineText
+    checker2Line.font = { size: 9 }
+    checker2Line.alignment = { horizontal: "left", vertical: "top" }
 
     const mengetahuiCol = 4
     const mengetahuiLabel = worksheet.getCell(labelRow, mengetahuiCol)
@@ -531,9 +532,9 @@ export default function DeliveryOrderPage() {
     mengetahuiLabel.font = { size: 11 }
     mengetahuiLabel.alignment = { horizontal: "left", vertical: "middle" }
     const mengetahuiLine = worksheet.getCell(lineRow, mengetahuiCol)
-    mengetahuiLine.value = ""
-    mengetahuiLine.alignment = { horizontal: "left", vertical: "middle" }
-    mengetahuiLine.border = { top: {}, bottom: { style: "thin" }, left: {}, right: {} }
+    mengetahuiLine.value = "_____________"
+    mengetahuiLine.font = { size: 9 }
+    mengetahuiLine.alignment = { horizontal: "left", vertical: "top" }
 
     const buffer = await workbook.xlsx.writeBuffer()
     const blob = new Blob([buffer], {
