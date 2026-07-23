@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useRef } from "react"
 import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
 import { Item } from "@/types"
@@ -8,6 +8,13 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 import {
   Dialog,
@@ -73,6 +80,11 @@ export default function StockInPage() {
   const [lowStockOnly, setLowStockOnly] = useState(false)
   const [deleteItemTarget, setDeleteItemTarget] = useState<GroupedItem | null>(null)
   const [deletingItem, setDeletingItem] = useState(false)
+  const [dialogJustOpened, setDialogJustOpened] = useState(false)
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false)
+  const [historyPage, setHistoryPage] = useState(1)
+  const [historyPageSize, setHistoryPageSize] = useState(10)
+  const [historySearch, setHistorySearch] = useState("")
   const { user } = useAuth()
   const supabase = useMemo(() => createClient(), [])
 
@@ -166,13 +178,69 @@ export default function StockInPage() {
       )
   }, [selectedItemId, records])
 
+  const filteredItems = useMemo(() => {
+    const isSearching = itemSearch.trim().length > 0
+    if (!isSearching) return items.slice(0, 5)
+
+    const searchLower = itemSearch.toLowerCase()
+    return items.filter((item) =>
+      item.part_number.toLowerCase().includes(searchLower) ||
+      (item.category ?? "").toLowerCase().includes(searchLower)
+    ).slice(0, 10)
+  }, [items, itemSearch])
+
+  const paginatedRecords = useMemo(() => {
+    const startIndex = (historyPage - 1) * historyPageSize
+    const endIndex = startIndex + historyPageSize
+    return records.slice(startIndex, endIndex)
+  }, [records, historyPage, historyPageSize])
+
+  const filteredHistoryRecords = useMemo(() => {
+    if (!historySearch.trim()) return records
+    const searchLower = historySearch.toLowerCase()
+    return records.filter((r) =>
+      (r.items?.part_number ?? "").toLowerCase().includes(searchLower) ||
+      (r.do_number ?? "").toLowerCase().includes(searchLower) ||
+      (r.po_number ?? "").toLowerCase().includes(searchLower) ||
+      (r.note ?? "").toLowerCase().includes(searchLower) ||
+      r.tipe.toLowerCase().includes(searchLower)
+    )
+  }, [records, historySearch])
+
+  const paginatedFilteredRecords = useMemo(() => {
+    const startIndex = (historyPage - 1) * historyPageSize
+    const endIndex = startIndex + historyPageSize
+    return filteredHistoryRecords.slice(startIndex, endIndex)
+  }, [filteredHistoryRecords, historyPage, historyPageSize])
+
+  const totalPages = Math.ceil(filteredHistoryRecords.length / historyPageSize)
+
   const openNewDialog = () => {
     setEditRecord(null)
     setSelectedItem("")
     setItemSearch("")
     setQty("")
     setNote("")
+    setItemPopoverOpen(false)
+    setDialogJustOpened(true)
     setDialogOpen(true)
+    setTimeout(() => setDialogJustOpened(false), 300)
+  }
+
+  const openHistoryDialog = () => {
+    setHistoryPage(1)
+    setHistorySearch("")
+    setHistoryDialogOpen(true)
+  }
+
+  const handleHistorySearchChange = (value: string) => {
+    setHistorySearch(value)
+    setHistoryPage(1)
+  }
+
+  const handleHistoryPageSizeChange = (size: string) => {
+    setHistoryPageSize(Number(size))
+    setHistoryPage(1)
   }
 
   const openEditDialog = (record: HistoryRecord) => {
@@ -394,6 +462,15 @@ export default function StockInPage() {
       cell: ({ row }) => (row.original.item as any).uom ?? "-",
     },
     {
+      id: "note",
+      header: "Keterangan",
+      cell: ({ row }) => {
+        const itemRecords = records.filter(r => r.item_id === row.original.item.id && r.tipe === "Stock Masuk")
+        const latestNote = itemRecords.length > 0 ? itemRecords[0].note : null
+        return latestNote ?? "-"
+      },
+    },
+    {
       id: "created_at",
       header: "Created At",
       cell: ({ row }) => {
@@ -406,14 +483,29 @@ export default function StockInPage() {
           id: "actions",
           header: "",
           cell: ({ row }: { row: any }) => (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-destructive hover:text-destructive"
-              onClick={() => setDeleteItemTarget(row.original)}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => {
+                  const itemRecords = records.filter(r => r.item_id === row.original.item.id && r.tipe === "Stock Masuk")
+                  if (itemRecords.length > 0) {
+                    openEditDialog(itemRecords[0])
+                  }
+                }}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive hover:text-destructive"
+                onClick={() => setDeleteItemTarget(row.original)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           ),
         }]
       : []),
@@ -439,6 +531,13 @@ export default function StockInPage() {
             <AlertTriangle className="mr-2 h-4 w-4" />
             Stok Menipis
           </Button>
+          <Button
+            variant="outline"
+            onClick={openHistoryDialog}
+          >
+            <History className="mr-2 h-4 w-4" />
+            History
+          </Button>
           {user?.role !== "user" && (
             <Button onClick={openNewDialog}>
               <Plus className="mr-2 h-4 w-4" />
@@ -451,7 +550,7 @@ export default function StockInPage() {
       <DataTable
         columns={columns}
         data={groupedData}
-        searchKey={["item.part_number", "item.category", "item.rack", "item.uom"]}
+        searchKey={["item.part_number", "item.category", "item.rack", "item.uom", "note"]}
         searchPlaceholder="Cari part number..."
       />
 
@@ -614,7 +713,7 @@ export default function StockInPage() {
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label>Pilih Barang</Label>
+              <Label>Part Number</Label>
               <div className="relative">
                 <Input
                   placeholder="Ketik part number untuk cari..."
@@ -626,11 +725,19 @@ export default function StockInPage() {
                   onChange={(e) => {
                     setItemSearch(e.target.value)
                     if (selectedItem) setSelectedItem("")
+                    if (!dialogJustOpened) {
+                      setItemPopoverOpen(e.target.value.length > 0)
+                    }
                   }}
-                  onFocus={() => setItemPopoverOpen(true)}
+                  onFocus={() => {
+                    if (!dialogJustOpened) {
+                      setItemPopoverOpen(itemSearch.length > 0)
+                    }
+                  }}
                   onBlur={() => setTimeout(() => setItemPopoverOpen(false), 200)}
                   disabled={!!editRecord}
                   className="w-full"
+                  autoFocus={false}
                 />
                 {itemPopoverOpen && (
                   <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border bg-popover shadow-md overflow-hidden">
@@ -646,52 +753,42 @@ export default function StockInPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {(() => {
-                            const isSearching = itemSearch.trim().length > 0
-                            const filtered = items.filter((item) =>
-                              !isSearching
-                                ? true
-                                : item.part_number.toLowerCase().includes(itemSearch.toLowerCase()) ||
-                                  (item.category ?? "").toLowerCase().includes(itemSearch.toLowerCase())
-                            )
-                            const displayed = isSearching ? filtered : filtered.slice(0, 5)
-                            return displayed.length === 0 ? (
-                              <tr>
-                                <td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">
-                                  Barang tidak ditemukan
-                                </td>
-                              </tr>
-                            ) : (
-                              <>
-                                {displayed.map((item) => (
-                                  <tr
-                                    key={item.id}
-                                    className="hover:bg-accent cursor-pointer"
-                                    aria-selected={selectedItem === item.id}
-                                    onMouseDown={(e) => {
-                                      e.preventDefault()
-                                      setSelectedItem(item.id)
-                                      setItemSearch("")
-                                      setItemPopoverOpen(false)
-                                    }}
-                                  >
-                                    <td className="px-3 py-2.5 border-r border-b">{item.part_number}</td>
-                                    <td className="px-3 py-2.5 border-r border-b max-w-[120px] truncate">{item.category ?? "-"}</td>
-                                    <td className="px-3 py-2.5 border-r border-b">{item.rack ?? "-"}</td>
-                                    <td className="px-3 py-2.5 border-r border-b">{(item as any).uom ?? "-"}</td>
-                                    <td className="px-3 py-2.5 border-b text-right tabular-nums">{item.current_stock}</td>
-                                  </tr>
-                                ))}
-                                {!isSearching && filtered.length > 5 && (
-                                  <tr>
-                                    <td colSpan={5} className="px-3 py-2 text-center text-muted-foreground border-t bg-muted/30">
-                                      +{filtered.length - 5} data lainnya. Ketik untuk cari lebih spesifik.
-                                    </td>
-                                  </tr>
-                                )}
-                              </>
-                            )
-                          })()}
+                          {filteredItems.length === 0 ? (
+                            <tr>
+                              <td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">
+                                Barang tidak ditemukan
+                              </td>
+                            </tr>
+                          ) : (
+                            <>
+                              {filteredItems.map((item) => (
+                                <tr
+                                  key={item.id}
+                                  className="hover:bg-accent cursor-pointer"
+                                  aria-selected={selectedItem === item.id}
+                                  onMouseDown={(e) => {
+                                    e.preventDefault()
+                                    setSelectedItem(item.id)
+                                    setItemSearch("")
+                                    setItemPopoverOpen(false)
+                                  }}
+                                >
+                                  <td className="px-3 py-2.5 border-r border-b">{item.part_number}</td>
+                                  <td className="px-3 py-2.5 border-r border-b max-w-[120px] truncate">{item.category ?? "-"}</td>
+                                  <td className="px-3 py-2.5 border-r border-b">{item.rack ?? "-"}</td>
+                                  <td className="px-3 py-2.5 border-r border-b">{(item as any).uom ?? "-"}</td>
+                                  <td className="px-3 py-2.5 border-b text-right tabular-nums">{item.current_stock}</td>
+                                </tr>
+                              ))}
+                              {itemSearch.trim().length === 0 && items.length > 5 && (
+                                <tr>
+                                  <td colSpan={5} className="px-3 py-2 text-center text-muted-foreground border-t bg-muted/30">
+                                    +{items.length - 5} data lainnya. Ketik untuk cari lebih spesifik.
+                                  </td>
+                                </tr>
+                              )}
+                            </>
+                          )}
                         </tbody>
                       </table>
                     </div>
@@ -699,6 +796,31 @@ export default function StockInPage() {
                 )}
               </div>
             </div>
+
+            {selectedItem && (() => {
+              const item = items.find(i => i.id === selectedItem)
+              if (!item) return null
+              return (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Category</Label>
+                    <div className="text-sm font-medium">{item.category ?? "-"}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Rak</Label>
+                    <div className="text-sm font-medium">{item.rack ?? "-"}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">UOM</Label>
+                    <div className="text-sm font-medium">{(item as any).uom ?? "-"}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Stock</Label>
+                    <div className="text-sm font-medium">{item.current_stock}</div>
+                  </div>
+                </div>
+              )
+            })()}
 
             <div className="grid gap-3 sm:gap-4 sm:grid-cols-2">
               <div className="space-y-2">
@@ -730,6 +852,122 @@ export default function StockInPage() {
                   : "Simpan"}
             </Button>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen}>
+        <DialogContent className="sm:max-w-4xl max-w-full max-h-[90dvh] p-4 sm:p-6 overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-5 w-5 shrink-0" />
+              History Stock
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              placeholder="Cari berdasarkan part number, DO, PO, keterangan, atau tipe..."
+              value={historySearch}
+              onChange={(e) => handleHistorySearchChange(e.target.value)}
+              className="max-w-md"
+            />
+            <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Part Number</TableHead>
+                  <TableHead>NO DO</TableHead>
+                  <TableHead>NO PO</TableHead>
+                  <TableHead>Keterangan</TableHead>
+                  <TableHead className="text-green-600">QTY In</TableHead>
+                  <TableHead className="text-red-600">QTY Out</TableHead>
+                  <TableHead>Tipe</TableHead>
+                  <TableHead>Tanggal</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredHistoryRecords.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                      Belum ada riwayat transaksi
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  paginatedFilteredRecords.map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell>{r.items?.part_number ?? "-"}</TableCell>
+                      <TableCell>{r.do_number ?? "-"}</TableCell>
+                      <TableCell>{r.po_number ?? "-"}</TableCell>
+                      <TableCell>{r.note ?? "-"}</TableCell>
+                      <TableCell className="text-green-600 font-semibold">
+                        {r.tipe === "Stock Masuk" ? `+${r.qty}` : ""}
+                      </TableCell>
+                      <TableCell className="text-red-600 font-semibold">
+                        {r.tipe === "Delivery Order" ? `${Math.abs(r.qty)}` : ""}
+                      </TableCell>
+                      <TableCell>
+                        {r.tipe === "Stock Masuk" ? (
+                          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-300">Stock Masuk</Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-300">Delivery Order</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {new Date(r.created_at).toLocaleString("id-ID")}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          {filteredHistoryRecords.length > 0 && (
+            <div className="flex items-center justify-between mt-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">
+                  Tampilkan
+                </span>
+                <Select value={String(historyPageSize)} onValueChange={handleHistoryPageSizeChange}>
+                  <SelectTrigger className="w-[70px] h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5</SelectItem>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-sm text-muted-foreground">
+                  dari {filteredHistoryRecords.length} total
+                </span>
+              </div>
+              {totalPages > 1 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">
+                    Halaman {historyPage} dari {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setHistoryPage(p => Math.max(1, p - 1))}
+                    disabled={historyPage === 1}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setHistoryPage(p => Math.min(totalPages, p + 1))}
+                    disabled={historyPage === totalPages}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
