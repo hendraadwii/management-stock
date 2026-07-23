@@ -42,6 +42,7 @@ export interface DeliveryOrder {
   do_number: string
   po_number: string
   shipping: string
+  customer_desc?: string
   created_at: string
   created_by: string
   delivery_order_details?: DeliveryOrderDetail[]
