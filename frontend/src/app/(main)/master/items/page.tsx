@@ -39,6 +39,7 @@ export default function ItemsPage() {
   const [category, setCategory] = useState("")
   const [rack, setRack] = useState("")
   const [uom, setUom] = useState("")
+  const [standarQty, setStandarQty] = useState("")
   const supabase = useMemo(() => createClient(), [])
 
   const fetchItems = async () => {
@@ -61,6 +62,7 @@ export default function ItemsPage() {
     setCategory("")
     setRack("")
     setUom("")
+    setStandarQty("")
     setEditItem(null)
   }
 
@@ -80,6 +82,7 @@ export default function ItemsPage() {
           category: category.trim() || null,
           rack: rack.trim() || null,
           uom: uom || null,
+          standar_qty: standarQty ? parseFloat(standarQty.replace(',', '.')) : null,
         })
         .eq("id", editItem.id)
 
@@ -106,6 +109,7 @@ export default function ItemsPage() {
         category: category.trim() || null,
         rack: rack.trim() || null,
         uom: uom || null,
+        standar_qty: standarQty ? parseFloat(standarQty.replace(',', '.')) : null,
       })
 
       if (error) {
@@ -134,6 +138,7 @@ export default function ItemsPage() {
     setCategory(pendingEditItem.category ?? "")
     setRack(pendingEditItem.rack ?? "")
     setUom((pendingEditItem as any).uom ?? "")
+    setStandarQty((pendingEditItem as any).standar_qty?.toString() ?? "")
     setEditConfirmOpen(false)
     setPendingEditItem(null)
     setOpen(true)
@@ -192,6 +197,11 @@ export default function ItemsPage() {
       accessorKey: "category",
       header: "Category",
       cell: ({ row }) => row.original.category ?? "-",
+    },
+    {
+      accessorKey: "standar_qty",
+      header: "Standar QTY",
+      cell: ({ row }) => (row.original as any).standar_qty ?? "-",
     },
     {
       accessorKey: "rack",
@@ -273,6 +283,23 @@ export default function ItemsPage() {
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
                   placeholder="Masukkan kategori"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="standarQty">Standar QTY</Label>
+                <Input
+                  id="standarQty"
+                  type="text"
+                  inputMode="decimal"
+                  value={standarQty}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    // Allow only numbers, comma, and dot
+                    if (/^[0-9.,]*$/.test(value)) {
+                      setStandarQty(value)
+                    }
+                  }}
+                  placeholder="Masukkan standar qty (contoh: 10.5 atau 10,5)"
                 />
               </div>
               <div className="space-y-2">

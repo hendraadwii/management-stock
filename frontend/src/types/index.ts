@@ -24,6 +24,7 @@ export interface Item {
   category: string | null
   rack: string | null
   current_stock: number
+  minimal_qty: number | null
 }
 
 export interface StockIn {
