@@ -64,6 +64,7 @@ export default function DeliveryOrderPage() {
   const [editDo, setEditDo] = useState<DeliveryOrder | null>(null)
   const [poNumber, setPoNumber] = useState("")
   const [shipping, setShipping] = useState("")
+  const [customerDesc, setCustomerDesc] = useState("")
   const [selectedItem, setSelectedItem] = useState("")
   const [itemSearch, setItemSearch] = useState("")
   const [itemPopoverOpen, setItemPopoverOpen] = useState(false)
@@ -192,6 +193,7 @@ export default function DeliveryOrderPage() {
     setEditDo(null)
     setPoNumber("")
     setShipping("")
+    setCustomerDesc("")
     setFormItems([])
     setSelectedItem("")
     setItemSearch("")
@@ -211,6 +213,7 @@ export default function DeliveryOrderPage() {
     setEditDo(doRecord)
     setPoNumber(doRecord.po_number)
     setShipping(doRecord.shipping)
+    setCustomerDesc(doRecord.customer_desc ?? "")
 
     const details = (doRecord as any).delivery_order_details || []
     const doFormItems: DOFormItem[] = details.map((d: any) => {
@@ -434,6 +437,7 @@ export default function DeliveryOrderPage() {
       ["No PO", doRecord.po_number],
       ["No DO", doRecord.do_number],
       ["Shipping", doRecord.shipping],
+      ["Customer", doRecord.customer_desc ?? "-"],
       ["Date", new Date(doRecord.created_at).toLocaleDateString("id-ID")],
     ]
 
@@ -498,24 +502,38 @@ export default function DeliveryOrderPage() {
       }
     })
 
-    const signatureLabelRow = 11
-    const signatureLineRow = 14
-    const signatureCol = 4
+    const labelRow = 11
+    const lineRow = 14
 
-    const signatureLabel = worksheet.getCell(signatureLabelRow, signatureCol)
-    signatureLabel.value = "Mengetahui,"
-    signatureLabel.font = { size: 11 }
-    signatureLabel.alignment = { horizontal: "left", vertical: "middle" }
+    const checker1Col = 2
+    const checker1Label = worksheet.getCell(labelRow, checker1Col)
+    checker1Label.value = "Checker 1,"
+    checker1Label.font = { size: 11 }
+    checker1Label.alignment = { horizontal: "left", vertical: "middle" }
+    const checker1Line = worksheet.getCell(lineRow, checker1Col)
+    checker1Line.value = ""
+    checker1Line.alignment = { horizontal: "left", vertical: "middle" }
+    checker1Line.border = { top: {}, bottom: { style: "thin" }, left: {}, right: {} }
 
-    const signatureLineCell = worksheet.getCell(signatureLineRow, signatureCol)
-    signatureLineCell.value = ""
-    signatureLineCell.alignment = { horizontal: "left", vertical: "middle" }
-    signatureLineCell.border = {
-      top: {},
-      bottom: { style: "thin" },
-      left: {},
-      right: {},
-    }
+    const checker2Col = 3
+    const checker2Label = worksheet.getCell(labelRow, checker2Col)
+    checker2Label.value = "Checker 2,"
+    checker2Label.font = { size: 11 }
+    checker2Label.alignment = { horizontal: "left", vertical: "middle" }
+    const checker2Line = worksheet.getCell(lineRow, checker2Col)
+    checker2Line.value = ""
+    checker2Line.alignment = { horizontal: "left", vertical: "middle" }
+    checker2Line.border = { top: {}, bottom: { style: "thin" }, left: {}, right: {} }
+
+    const mengetahuiCol = 4
+    const mengetahuiLabel = worksheet.getCell(labelRow, mengetahuiCol)
+    mengetahuiLabel.value = "Mengetahui,"
+    mengetahuiLabel.font = { size: 11 }
+    mengetahuiLabel.alignment = { horizontal: "left", vertical: "middle" }
+    const mengetahuiLine = worksheet.getCell(lineRow, mengetahuiCol)
+    mengetahuiLine.value = ""
+    mengetahuiLine.alignment = { horizontal: "left", vertical: "middle" }
+    mengetahuiLine.border = { top: {}, bottom: { style: "thin" }, left: {}, right: {} }
 
     const buffer = await workbook.xlsx.writeBuffer()
     const blob = new Blob([buffer], {
@@ -577,16 +595,17 @@ export default function DeliveryOrderPage() {
     autoTable(doc, {
       startY: yTitle + 16,
       body: [
-        ["NO PO", doRecord.po_number, "Shipping", doRecord.shipping],
-        ["NO DO", doRecord.do_number, "Date", new Date(doRecord.created_at).toLocaleDateString("id-ID")],
+        ["Customer", doRecord.customer_desc ?? "-"],
+        ["NO PO", doRecord.po_number],
+        ["NO DO", doRecord.do_number],
+        ["Shipping", doRecord.shipping],
+        ["Date", new Date(doRecord.created_at).toLocaleDateString("id-ID")],
       ],
       theme: "grid",
-      styles: { fontSize: 10, cellPadding: 4, lineColor: grayBorder, lineWidth: lineW, textColor: [50, 50, 50] },
+      styles: { fontSize: 9, cellPadding: 2, lineColor: grayBorder, lineWidth: lineW, textColor: [50, 50, 50], halign: "left" },
       columnStyles: {
-        0: { fontStyle: "bold", cellWidth: 22 },
-        1: { cellWidth: 68 },
-        2: { fontStyle: "bold", cellWidth: 24 },
-        3: { cellWidth: contentW - 22 - 68 - 24 },
+        0: { fontStyle: "bold", cellWidth: 25 },
+        1: { cellWidth: contentW - 25 },
       },
       margin: { left: margin, right: margin },
     })
@@ -627,19 +646,35 @@ export default function DeliveryOrderPage() {
       margin: { left: margin, right: margin },
     })
 
-    const tblEnd = (doc as any).lastAutoTable.finalY + 8
+    const tblEnd = (doc as any).lastAutoTable.finalY
+    const sigSpaceNeeded = 35
+    const pageH = doc.internal.pageSize.getHeight()
+    const sigStartY = tblEnd + 10
 
-    const signY = tblEnd + 24
-    doc.setFont("helvetica", "normal")
-    doc.setFontSize(12)
-    const lineStr = "____________________________"
-    const lineX = pageW - margin - doc.getTextWidth(lineStr)
-    doc.setFont("helvetica", "bold")
-    doc.setFontSize(11)
-    doc.text("Mengetahui,", lineX, signY, { align: "left" })
-    doc.setFont("helvetica", "normal")
-    doc.setFontSize(12)
-    doc.text(lineStr, lineX, signY + 26, { align: "left" })
+    let sigY: number
+    if (sigStartY + sigSpaceNeeded > pageH - margin) {
+      doc.addPage()
+      sigY = 30
+    } else {
+      sigY = sigStartY
+    }
+    const colW = contentW / 3
+    const lineLen = 50
+    const sigLabels = ["Checker 1,", "Checker 2,", "Mengetahui,"]
+
+    sigLabels.forEach((label, i) => {
+      const colX = margin + i * colW
+      const centerX = colX + colW / 2
+      const lineStartX = centerX - lineLen / 2
+
+      doc.setFont("helvetica", "bold")
+      doc.setFontSize(11)
+      doc.text(label, centerX, sigY, { align: "center" })
+
+      doc.setDrawColor(0)
+      doc.setLineWidth(0.3)
+      doc.line(lineStartX, sigY + 20, lineStartX + lineLen, sigY + 20)
+    })
 
     doc.save(`DO_${doRecord.do_number.replace(/\//g, "-")}.pdf`)
   }
@@ -678,6 +713,7 @@ export default function DeliveryOrderPage() {
         .update({
           po_number: poNumber.trim(),
           shipping: shipping.trim(),
+          customer_desc: customerDesc.trim() || null,
         })
         .eq("id", editDo.id)
 
@@ -697,6 +733,7 @@ export default function DeliveryOrderPage() {
           do_number: doNumber,
           po_number: poNumber.trim(),
           shipping: shipping.trim(),
+          customer_desc: customerDesc.trim() || null,
           status: "draft",
           created_by: user?.id,
         })
@@ -723,6 +760,7 @@ export default function DeliveryOrderPage() {
     setDialogOpen(false)
     setPoNumber("")
     setShipping("")
+    setCustomerDesc("")
     setFormItems([])
     setEditDo(null)
     setLoading(false)
@@ -757,6 +795,11 @@ export default function DeliveryOrderPage() {
     {
       accessorKey: "shipping",
       header: "Shipping",
+    },
+    {
+      accessorKey: "customer_desc",
+      header: "Customer",
+      cell: ({ row }) => (row.original as any).customer_desc ?? "-",
     },
     {
       id: "status",
@@ -884,6 +927,10 @@ export default function DeliveryOrderPage() {
                   <span className="font-semibold min-w-20">Date:</span>
                   <span>{new Date(d.created_at).toLocaleDateString("id-ID")}</span>
                 </div>
+                <div className="flex gap-2 text-sm">
+                  <span className="font-semibold min-w-20">Customer:</span>
+                  <span>{d.customer_desc ?? "-"}</span>
+                </div>
               </div>
               <div className="rounded-md border overflow-x-auto">
                 <Table>
@@ -967,6 +1014,15 @@ export default function DeliveryOrderPage() {
                   placeholder="Nama shipping / ekspedisi"
                 />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="customerDesc">Customer</Label>
+              <Input
+                id="customerDesc"
+                value={customerDesc}
+                onChange={(e) => setCustomerDesc(e.target.value)}
+                placeholder="Masukkan nama customer"
+              />
             </div>
 
             <div className="space-y-4">
