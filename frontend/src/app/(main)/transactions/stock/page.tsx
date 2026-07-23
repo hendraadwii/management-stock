@@ -238,9 +238,11 @@ export default function StockInPage() {
     setHistoryPage(1)
   }
 
-  const handleHistoryPageSizeChange = (size: string) => {
-    setHistoryPageSize(Number(size))
-    setHistoryPage(1)
+  const handleHistoryPageSizeChange = (size: string | null) => {
+    if (size) {
+      setHistoryPageSize(Number(size))
+      setHistoryPage(1)
+    }
   }
 
   const openEditDialog = (record: HistoryRecord) => {
