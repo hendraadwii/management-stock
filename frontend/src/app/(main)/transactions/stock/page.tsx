@@ -102,11 +102,20 @@ export default function StockInPage() {
 
     const { data: doDetails } = await supabase
       .from("delivery_order_details")
-      .select("id, item_id, qty, delivery_order_id, created_at")
+      .select("id, item_id, qty, delivery_order_id")
     const { data: doOrders } = await supabase
       .from("delivery_orders")
       .select("id, do_number, po_number, created_at")
     const doMap = new Map((doOrders ?? []).map((o: any) => [o.id, o]))
+
+    // Debug: log delivery order data for item 00621-20
+    const targetItem = itemsData?.find((i: any) => i.part_number === "00621-20")
+    if (targetItem) {
+      console.log("Target item:", targetItem.id, targetItem.part_number)
+      console.log("DO Details for this item:", doDetails?.filter((d: any) => d.item_id === targetItem.id))
+      console.log("Total DO Details:", doDetails?.length)
+      console.log("DO Orders:", doOrders?.length)
+    }
 
     if (itemsData) setItems(itemsData)
     const allRecords: HistoryRecord[] = []
@@ -137,7 +146,7 @@ export default function StockInPage() {
           qty: -d.qty,
           tipe: "Delivery Order",
           note: null,
-          created_at: order?.created_at ?? d.created_at,
+          created_at: order?.created_at ?? new Date().toISOString(),
           do_number: order?.do_number ?? null,
           po_number: order?.po_number ?? null,
           items: itemsData?.find((i: any) => i.id === d.item_id) ?? null,
