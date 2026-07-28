@@ -28,6 +28,7 @@ interface DataTableProps<TData, TValue> {
   data: TData[]
   searchKey?: string | string[]
   searchPlaceholder?: string
+  onRowClick?: (row: TData) => void
 }
 
 /** Ambil nilai nested dari object berdasarkan dot-notation key, misal "item.part_number" */
@@ -69,6 +70,7 @@ export function DataTable<TData, TValue>({
   data,
   searchKey,
   searchPlaceholder = "Search...",
+  onRowClick,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState("")
@@ -145,6 +147,8 @@ export function DataTable<TData, TValue>({
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
+                  className={onRowClick ? "cursor-pointer hover:bg-muted/50" : ""}
+                  onClick={() => onRowClick?.(row.original)}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>

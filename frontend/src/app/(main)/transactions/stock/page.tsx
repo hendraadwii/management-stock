@@ -82,6 +82,7 @@ export default function StockInPage() {
   const [deletingItem, setDeletingItem] = useState(false)
   const [dialogJustOpened, setDialogJustOpened] = useState(false)
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false)
+  const [historyItemId, setHistoryItemId] = useState<string | null>(null)
   const [historyPage, setHistoryPage] = useState(1)
   const [historyPageSize, setHistoryPageSize] = useState(10)
   const [historySearch, setHistorySearch] = useState("")
@@ -196,16 +197,20 @@ export default function StockInPage() {
   }, [records, historyPage, historyPageSize])
 
   const filteredHistoryRecords = useMemo(() => {
-    if (!historySearch.trim()) return records
+    let filtered = records
+    if (historyItemId) {
+      filtered = filtered.filter((r) => r.item_id === historyItemId)
+    }
+    if (!historySearch.trim()) return filtered
     const searchLower = historySearch.toLowerCase()
-    return records.filter((r) =>
+    return filtered.filter((r) =>
       (r.items?.part_number ?? "").toLowerCase().includes(searchLower) ||
       (r.do_number ?? "").toLowerCase().includes(searchLower) ||
       (r.po_number ?? "").toLowerCase().includes(searchLower) ||
       (r.note ?? "").toLowerCase().includes(searchLower) ||
       r.tipe.toLowerCase().includes(searchLower)
     )
-  }, [records, historySearch])
+  }, [records, historySearch, historyItemId])
 
   const paginatedFilteredRecords = useMemo(() => {
     const startIndex = (historyPage - 1) * historyPageSize
@@ -227,7 +232,8 @@ export default function StockInPage() {
     setTimeout(() => setDialogJustOpened(false), 300)
   }
 
-  const openHistoryDialog = () => {
+  const openHistoryDialog = (itemId: string | null = null) => {
+    setHistoryItemId(itemId)
     setHistoryPage(1)
     setHistorySearch("")
     setHistoryDialogOpen(true)
@@ -424,6 +430,7 @@ export default function StockInPage() {
           className="h-4 w-4 cursor-pointer"
           checked={selectedItemId === row.original.item.id}
           onChange={() => setSelectedItemId(row.original.item.id)}
+          onClick={(e) => e.stopPropagation()}
         />
       ),
     },
@@ -535,7 +542,7 @@ export default function StockInPage() {
           </Button>
           <Button
             variant="outline"
-            onClick={openHistoryDialog}
+            onClick={() => openHistoryDialog(selectedItemId)}
           >
             <History className="mr-2 h-4 w-4" />
             History
@@ -554,6 +561,7 @@ export default function StockInPage() {
         data={groupedData}
         searchKey={["item.part_number", "item.category", "item.rack", "item.uom", "note"]}
         searchPlaceholder="Cari part number..."
+        onRowClick={(row) => setSelectedItemId(row.item.id)}
       />
 
       {/* selectedItemId && (() => {

@@ -127,17 +127,22 @@ export default function DashboardPage() {
       // Monthly movements (last 6 months)
       const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1)
         .toISOString()
-        .split("T")[0]
 
       const { data: stockIns } = await supabase
         .from("trx_stock")
         .select("qty, created_at")
         .gte("created_at", sixMonthsAgo)
 
+      const { data: recentDOsForMovement } = await supabase
+        .from("delivery_orders")
+        .select("id, created_at")
+        .gte("created_at", sixMonthsAgo)
+
+      const doIds = recentDOsForMovement?.map((order: any) => order.id) || []
       const { data: doDetails } = await supabase
         .from("delivery_order_details")
-        .select("qty, created_at")
-        .gte("created_at", sixMonthsAgo)
+        .select("qty, delivery_order_id")
+        .in("delivery_order_id", doIds)
 
       const monthMap = new Map<string, { stock_in: number; delivery: number }>()
 
@@ -161,8 +166,13 @@ export default function DashboardPage() {
         if (entry) entry.stock_in += r.qty ?? 0
       })
 
+      // Map DO dates to details
+      const doDateMap = new Map(recentDOsForMovement?.map((order: any) => [order.id, order.created_at]) || [])
+
       doDetails?.forEach((r: any) => {
-        const d = new Date(r.created_at)
+        const createdAt = doDateMap.get(r.delivery_order_id)
+        if (!createdAt) return
+        const d = new Date(createdAt)
         const key = d.toLocaleDateString("id-ID", {
           year: "numeric",
           month: "short",
