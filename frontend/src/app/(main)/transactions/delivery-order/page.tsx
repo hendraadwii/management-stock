@@ -890,8 +890,8 @@ export default function DeliveryOrderPage() {
       <DataTable
         columns={doColumns}
         data={doList}
-        searchKey="do_number"
-        searchPlaceholder="Cari nomor DO..."
+        searchKey={["do_number", "po_number", "shipping", "customer_desc"]}
+        searchPlaceholder="Cari nomor DO, PO, shipping, atau customer..."
       />
 
       {selectedId && selectedDo && (() => {
