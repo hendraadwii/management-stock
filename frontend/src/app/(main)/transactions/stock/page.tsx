@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState, useMemo, useRef } from "react"
-import { createClient } from "@/lib/supabase"
+import { useEffect, useState, useMemo } from "react"
+import { apiGet, apiMutate } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
 import { Item } from "@/types"
 import { Badge } from "@/components/ui/badge"
@@ -54,7 +54,7 @@ interface HistoryRecord {
   created_by?: string
   do_number: string | null
   po_number: string | null
-  items?: Item
+  items?: Item | null
 }
 
 interface GroupedItem {
@@ -87,35 +87,32 @@ export default function StockInPage() {
   const [historyPageSize, setHistoryPageSize] = useState(10)
   const [historySearch, setHistorySearch] = useState("")
   const { user } = useAuth()
-  const supabase = useMemo(() => createClient(), [])
 
   const fetchData = async () => {
-    const { data: itemsData } = await supabase
-      .from("mst_items")
-      .select("*")
-      .order("part_number")
+    const [{ data: itemsData }, { data: recordsData }, { data: doData }] =
+      await Promise.all([
+        apiGet<{ data: Item[] }>("/api/items"),
+        apiGet<{ data: HistoryRecord[] }>("/api/stock"),
+        apiGet<{
+          data: {
+            id: string
+            do_number: string
+            po_number: string
+            created_at: string
+            delivery_order_details: {
+              id: string
+              item_id: string
+              qty: number
+              delivery_order_id: string
+            }[]
+          }[]
+        }>("/api/delivery-orders"),
+      ])
 
-    const { data: recordsData } = await supabase
-      .from("trx_stock")
-      .select("*")
-      .order("created_at", { ascending: false })
-
-    const { data: doDetails } = await supabase
-      .from("delivery_order_details")
-      .select("id, item_id, qty, delivery_order_id")
-    const { data: doOrders } = await supabase
-      .from("delivery_orders")
-      .select("id, do_number, po_number, created_at")
-    const doMap = new Map((doOrders ?? []).map((o: any) => [o.id, o]))
-
-    // Debug: log delivery order data for item 00621-20
-    const targetItem = itemsData?.find((i: any) => i.part_number === "00621-20")
-    if (targetItem) {
-      console.log("Target item:", targetItem.id, targetItem.part_number)
-      console.log("DO Details for this item:", doDetails?.filter((d: any) => d.item_id === targetItem.id))
-      console.log("Total DO Details:", doDetails?.length)
-      console.log("DO Orders:", doOrders?.length)
-    }
+    const doOrders = doData ?? []
+    const doDetails = doOrders.flatMap((o) =>
+      (o.delivery_order_details ?? []).map((d) => ({ ...d, do_number: o.do_number, po_number: o.po_number, created_at: o.created_at }))
+    )
 
     if (itemsData) setItems(itemsData)
     const allRecords: HistoryRecord[] = []
@@ -139,16 +136,15 @@ export default function StockInPage() {
 
     if (doDetails) {
       for (const d of doDetails) {
-        const order = doMap.get(d.delivery_order_id)
         allRecords.push({
           id: `do-${d.id}`,
           item_id: d.item_id,
           qty: -d.qty,
           tipe: "Delivery Order",
           note: null,
-          created_at: order?.created_at ?? new Date().toISOString(),
-          do_number: order?.do_number ?? null,
-          po_number: order?.po_number ?? null,
+          created_at: d.created_at ?? new Date().toISOString(),
+          do_number: d.do_number ?? null,
+          po_number: d.po_number ?? null,
           items: itemsData?.find((i: any) => i.id === d.item_id) ?? null,
         })
       }
@@ -281,31 +277,11 @@ export default function StockInPage() {
     const record = recordToDelete
 
     try {
-      const { data: itemData } = await supabase
-        .from("mst_items")
-        .select("current_stock")
-        .eq("id", record.item_id)
-        .single()
-
-      if (itemData) {
-        const newStock = Math.max(0, itemData.current_stock - Math.abs(record.qty))
-        await supabase
-          .from("mst_items")
-          .update({ current_stock: newStock })
-          .eq("id", record.item_id)
-      }
-
-      const { error } = await supabase
-        .from("trx_stock")
-        .delete()
-        .eq("id", record.id)
-
-      if (error) throw error
-
+      await apiMutate(`/api/stock/${record.id}`, "DELETE")
       toast.success("Data stock masuk berhasil dihapus")
       await fetchData()
-    } catch (error) {
-      toast.error("Gagal menghapus data stock masuk")
+    } catch (error: any) {
+      toast.error(error.message || "Gagal menghapus data stock masuk")
     } finally {
       setDeleting(false)
       setDeleteDialogOpen(false)
@@ -326,70 +302,30 @@ export default function StockInPage() {
     const normalizedNote = note.trim() || null
 
     if (editRecord) {
-      const oldQty = editRecord.qty
-
-      const { error } = await supabase
-        .from("trx_stock")
-        .update({
+      try {
+        await apiMutate(`/api/stock/${editRecord.id}`, "PATCH", {
           qty: qtyNum,
           note: normalizedNote,
         })
-        .eq("id", editRecord.id)
-
-      if (error) {
-        toast.error("Gagal mengupdate stock masuk")
+        toast.success("Stock masuk berhasil diupdate")
+      } catch (error: any) {
+        toast.error(error.message || "Gagal mengupdate stock masuk")
         setLoading(false)
         return
       }
-
-      const { data: itemData } = await supabase
-        .from("mst_items")
-        .select("current_stock")
-        .eq("id", selectedItem)
-        .single()
-
-      if (itemData) {
-        const newStock = itemData.current_stock - oldQty + qtyNum
-        await supabase
-          .from("mst_items")
-          .update({ current_stock: newStock })
-          .eq("id", selectedItem)
-      }
-
-      toast.success("Stock masuk berhasil diupdate")
     } else {
-      const { error: stockInError } = await supabase
-        .from("trx_stock")
-        .insert({
+      try {
+        await apiMutate("/api/stock", "POST", {
           item_id: selectedItem,
           qty: qtyNum,
           note: normalizedNote,
-          created_by: user?.id,
         })
-        .select()
-        .single()
-
-      if (stockInError) {
-        toast.error("Gagal mencatat stock masuk")
+        toast.success("Stock masuk berhasil dicatat")
+      } catch (error: any) {
+        toast.error(error.message || "Gagal mencatat stock masuk")
         setLoading(false)
         return
       }
-
-      const { data: currentItem } = await supabase
-        .from("mst_items")
-        .select("current_stock")
-        .eq("id", selectedItem)
-        .single()
-
-      if (currentItem) {
-        const newStock = currentItem.current_stock + qtyNum
-        await supabase
-          .from("mst_items")
-          .update({ current_stock: newStock })
-          .eq("id", selectedItem)
-      }
-
-      toast.success("Stock masuk berhasil dicatat")
     }
 
     setDialogOpen(false)
@@ -405,23 +341,14 @@ export default function StockInPage() {
     if (!deleteItemTarget) return
     setDeletingItem(true)
     try {
-      const { error } = await supabase
-        .from("trx_stock")
-        .delete()
-        .eq("item_id", deleteItemTarget.item.id)
-
-      if (error) throw error
-
-      // Reset current_stock ke 0
-      await supabase
-        .from("mst_items")
-        .update({ current_stock: 0 })
-        .eq("id", deleteItemTarget.item.id)
-
+      await apiMutate(
+        `/api/stock?item_id=${encodeURIComponent(deleteItemTarget.item.id)}`,
+        "DELETE"
+      )
       toast.success("Semua data stock berhasil dihapus")
       await fetchData()
-    } catch {
-      toast.error("Gagal menghapus data stock")
+    } catch (error: any) {
+      toast.error(error.message || "Gagal menghapus data stock")
     } finally {
       setDeletingItem(false)
       setDeleteItemTarget(null)

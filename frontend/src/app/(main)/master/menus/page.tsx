@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState, Fragment, useMemo } from "react"
-import { createClient } from "@/lib/supabase"
+import { useEffect, useState, Fragment } from "react"
+import { apiGet, apiMutate } from "@/lib/api"
 import { Menu } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -53,17 +53,14 @@ export default function MenusPage() {
   const [icon, setIcon] = useState("")
   const [parentId, setParentId] = useState("")
   const [sortOrder, setSortOrder] = useState("0")
-  const supabase = useMemo(() => createClient(), [])
 
   const fetchMenus = async () => {
-    const { data } = await supabase
-      .from("mst_menus")
-      .select("*")
-      .order("sort_order")
-      .order("name")
-
-    if (data) setMenus(data)
-    setLoading(false)
+    try {
+      const { data } = await apiGet<{ data: Menu[] }>("/api/menus")
+      setMenus(data)
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -99,24 +96,21 @@ export default function MenusPage() {
     }
 
     if (editItem) {
-      const { error } = await supabase
-        .from("mst_menus")
-        .update(payload)
-        .eq("id", editItem.id)
-
-      if (error) {
-        toast.error("Gagal mengupdate menu")
+      try {
+        await apiMutate(`/api/menus/${editItem.id}`, "PATCH", payload)
+        toast.success("Menu berhasil diupdate")
+      } catch (error: any) {
+        toast.error(error.message || "Gagal mengupdate menu")
         return
       }
-      toast.success("Menu berhasil diupdate")
     } else {
-      const { error } = await supabase.from("mst_menus").insert(payload)
-
-      if (error) {
-        toast.error("Gagal menambah menu")
+      try {
+        await apiMutate("/api/menus", "POST", payload)
+        toast.success("Menu berhasil ditambah")
+      } catch (error: any) {
+        toast.error(error.message || "Gagal menambah menu")
         return
       }
-      toast.success("Menu berhasil ditambah")
     }
 
     setOpen(false)
@@ -158,13 +152,13 @@ export default function MenusPage() {
       return
     }
 
-    const { error } = await supabase.from("mst_menus").delete().eq("id", id)
-    if (error) {
-      toast.error("Gagal menghapus menu")
-      return
+    try {
+      await apiMutate(`/api/menus/${id}`, "DELETE")
+      toast.success("Menu berhasil dihapus")
+      fetchMenus()
+    } catch (error: any) {
+      toast.error(error.message || "Gagal menghapus menu")
     }
-    toast.success("Menu berhasil dihapus")
-    fetchMenus()
   }
 
   return (

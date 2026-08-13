@@ -1,47 +1,34 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { getSessionFromRequest } from "@/lib/session"
 
-export function middleware(request: NextRequest) {
-  const authCookie = request.cookies.get("auth")?.value
+export async function middleware(request: NextRequest) {
+  const user = await getSessionFromRequest(request)
   const { pathname } = request.nextUrl
 
   // Public routes
-  if (pathname === "/login") {
-    if (authCookie) {
-      try {
-        const authData = JSON.parse(atob(authCookie))
-        const isUser = authData.role === "user"
-        const url = request.nextUrl.clone()
-        url.pathname = isUser ? "/transactions/stock" : "/dashboard"
-        return NextResponse.redirect(url)
-      } catch {
-        // Invalid auth, redirect to login
-        return NextResponse.next()
-      }
+  if (pathname === "/login" || pathname === "/api/auth/login") {
+    if (pathname === "/login" && user) {
+      const url = request.nextUrl.clone()
+      url.pathname = user.role === "user" ? "/transactions/stock" : "/dashboard"
+      return NextResponse.redirect(url)
     }
     return NextResponse.next()
   }
 
   // Protected routes - require auth
-  if (!authCookie) {
+  if (!user) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
     const url = request.nextUrl.clone()
     url.pathname = "/login"
     return NextResponse.redirect(url)
   }
 
   // Role-based access control
-  try {
-    const authData = JSON.parse(atob(authCookie))
-    const isUser = authData.role === "user"
-
-    // Users can only access transactions routes
-    if (isUser && !pathname.startsWith("/transactions") && pathname !== "/") {
-      const url = request.nextUrl.clone()
-      url.pathname = "/transactions/stock"
-      return NextResponse.redirect(url)
-    }
-  } catch {
+  if (user.role === "user" && !pathname.startsWith("/transactions") && pathname !== "/") {
     const url = request.nextUrl.clone()
-    url.pathname = "/login"
+    url.pathname = "/transactions/stock"
     return NextResponse.redirect(url)
   }
 

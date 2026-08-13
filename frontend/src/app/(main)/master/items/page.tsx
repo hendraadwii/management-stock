@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
-import { createClient } from "@/lib/supabase"
+import { useEffect, useState } from "react"
+import { apiGet, apiMutate } from "@/lib/api"
 import { Item } from "@/types"
 import { DataTable } from "@/components/data-table"
 import { ColumnDef } from "@tanstack/react-table"
@@ -40,17 +40,14 @@ export default function ItemsPage() {
   const [rack, setRack] = useState("")
   const [uom, setUom] = useState("")
   const [standarQty, setStandarQty] = useState("")
-  const supabase = useMemo(() => createClient(), [])
 
   const fetchItems = async () => {
-    const { data } = await supabase
-      .from("mst_items")
-      .select("*")
-      .order("part_number")
-    if (data) {
+    try {
+      const { data } = await apiGet<{ data: Item[] }>("/api/items")
       setItems(data)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   useEffect(() => {
@@ -75,49 +72,33 @@ export default function ItemsPage() {
     }
 
     if (editItem) {
-      const { error } = await supabase
-        .from("mst_items")
-        .update({
+      try {
+        await apiMutate(`/api/items/${editItem.id}`, "PATCH", {
           part_number: partNumber.trim(),
           category: category.trim() || null,
           rack: rack.trim() || null,
           uom: uom || null,
           standar_qty: standarQty ? parseFloat(standarQty.replace(',', '.')) : null,
         })
-        .eq("id", editItem.id)
-
-      if (error) {
-        toast.error("Gagal mengupdate item")
+        toast.success("Item berhasil diupdate")
+      } catch (error: any) {
+        toast.error(error.message || "Gagal mengupdate item")
         return
       }
-
-      toast.success("Item berhasil diupdate")
     } else {
-      const { data: existingItem } = await supabase
-        .from("mst_items")
-        .select("id")
-        .eq("part_number", partNumber.trim())
-        .limit(1)
-
-      if (existingItem && existingItem.length > 0) {
-        toast.error("Part Number sudah digunakan")
+      try {
+        await apiMutate("/api/items", "POST", {
+          part_number: partNumber.trim(),
+          category: category.trim() || null,
+          rack: rack.trim() || null,
+          uom: uom || null,
+          standar_qty: standarQty ? parseFloat(standarQty.replace(',', '.')) : null,
+        })
+        toast.success("Item berhasil dibuat")
+      } catch (error: any) {
+        toast.error(error.message || "Gagal membuat item")
         return
       }
-
-      const { error } = await supabase.from("mst_items").insert({
-        part_number: partNumber.trim(),
-        category: category.trim() || null,
-        rack: rack.trim() || null,
-        uom: uom || null,
-        standar_qty: standarQty ? parseFloat(standarQty.replace(',', '.')) : null,
-      })
-
-      if (error) {
-        toast.error("Gagal membuat item")
-        return
-      }
-
-      toast.success("Item berhasil dibuat")
     }
 
     setOpen(false)
@@ -151,41 +132,15 @@ export default function ItemsPage() {
   const handleDelete = async () => {
     if (!deleteTarget) return
 
-    const { count: stockCount } = await supabase
-      .from("trx_stock")
-      .select("*", { count: "exact", head: true })
-      .eq("item_id", deleteTarget.id)
-
-    const { count: doCount } = await supabase
-      .from("delivery_order_details")
-      .select("*", { count: "exact", head: true })
-      .eq("item_id", deleteTarget.id)
-
-    if ((stockCount ?? 0) > 0 || (doCount ?? 0) > 0) {
-      const reasons: string[] = []
-      if ((stockCount ?? 0) > 0) reasons.push("Stock")
-      if ((doCount ?? 0) > 0) reasons.push("Delivery Order")
-      toast.error(
-        `Item tidak bisa dihapus karena masih memiliki data di ${reasons.join(" & ")}`
-      )
+    try {
+      await apiMutate(`/api/items/${deleteTarget.id}`, "DELETE")
+      toast.success("Item berhasil dihapus")
       setDeleteTarget(null)
-      return
-    }
-
-    const { error } = await supabase
-      .from("mst_items")
-      .delete()
-      .eq("id", deleteTarget.id)
-
-    if (error) {
-      toast.error("Gagal menghapus item")
+      fetchItems()
+    } catch (error: any) {
+      toast.error(error.message || "Gagal menghapus item")
       setDeleteTarget(null)
-      return
     }
-
-    toast.success("Item berhasil dihapus")
-    setDeleteTarget(null)
-    fetchItems()
   }
 
   const columns: ColumnDef<Item>[] = [

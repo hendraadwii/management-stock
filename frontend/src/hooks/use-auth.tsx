@@ -24,22 +24,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter()
 
   useEffect(() => {
-    const stored = localStorage.getItem("auth_user")
-    if (stored) {
-      setUser(JSON.parse(stored))
+    const fetchUser = async () => {
+      try {
+        const res = await fetch("/api/auth/me", { credentials: "include" })
+        if (res.ok) {
+          const data = await res.json()
+          setUser(data)
+        } else {
+          setUser(null)
+        }
+      } catch {
+        setUser(null)
+      } finally {
+        setLoading(false)
+      }
     }
-    setLoading(false)
+    fetchUser()
   }, [])
 
   const signIn = (userData: User) => {
-    localStorage.setItem("auth_user", JSON.stringify(userData))
-    document.cookie = `auth=${btoa(JSON.stringify(userData))}; path=/`
     setUser(userData)
   }
 
-  const signOut = () => {
-    localStorage.removeItem("auth_user")
-    document.cookie = "auth=; path=/; max-age=0"
+  const signOut = async () => {
+    await fetch("/api/auth/logout", { method: "POST", credentials: "include" })
     setUser(null)
     router.push("/login")
   }

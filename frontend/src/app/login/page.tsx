@@ -13,7 +13,6 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { toast } from "sonner"
-import { createClient } from "@/lib/supabase"
 import { useAuth } from "@/hooks/use-auth"
 
 export default function LoginPage() {
@@ -21,35 +20,36 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const router = useRouter()
-  const supabase = createClient()
   const { signIn } = useAuth()
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
-    // Query ke tabel users di Supabase
-    const { data: user, error } = await supabase
-      .from("mst_users")
-      .select("*")
-      .eq("username", username.trim())
-      .maybeSingle()
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ username: username.trim(), password }),
+    })
 
-    if (error || !user || user.password !== password.trim()) {
-      toast.error("Username atau password salah")
+    const data = await res.json().catch(() => null)
+
+    if (!res.ok) {
+      toast.error(data?.error || "Username atau password salah")
       setLoading(false)
       return
     }
 
     signIn({
-      id: user.id,
-      username: user.username,
-      role: user.role,
-      created_at: user.created_at,
+      id: data.id,
+      username: data.username,
+      role: data.role,
+      created_at: data.created_at,
     })
 
     toast.success("Login berhasil")
-    router.push(user.role === "user" ? "/transactions/stock" : "/dashboard")
+    router.push(data.role === "user" ? "/transactions/stock" : "/dashboard")
   }
 
   return (

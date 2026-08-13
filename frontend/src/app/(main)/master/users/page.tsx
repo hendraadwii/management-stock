@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
-import { createClient } from "@/lib/supabase"
+import { useEffect, useState } from "react"
+import { apiGet, apiMutate } from "@/lib/api"
 import { User, RoleRecord } from "@/types"
 import { DataTable } from "@/components/data-table"
 import { ColumnDef } from "@tanstack/react-table"
@@ -40,19 +40,21 @@ export default function UsersPage() {
   const [password, setPassword] = useState("")
   const [role, setRole] = useState("")
   const [allRoles, setAllRoles] = useState<RoleRecord[]>([])
-  const supabase = useMemo(() => createClient(), [])
 
   const fetchUsers = async () => {
-    const { data } = await supabase.from("mst_users").select("*").order("username")
-    if (data) {
+    try {
+      const { data } = await apiGet<{ data: User[] }>("/api/users")
       setUsers(data)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const fetchRoles = async () => {
-    const { data } = await supabase.from("mst_roles").select("*").order("name")
-    if (data) setAllRoles(data)
+    try {
+      const { data } = await apiGet<{ data: RoleRecord[] }>("/api/roles")
+      setAllRoles(data)
+    } catch {}
   }
 
   useEffect(() => {
@@ -84,50 +86,30 @@ export default function UsersPage() {
         payload.password = password.trim()
       }
 
-      const { error } = await supabase
-        .from("mst_users")
-        .update(payload)
-        .eq("id", editItem.id)
-
-      if (error) {
-        toast.error("Gagal mengupdate user")
+      try {
+        await apiMutate(`/api/users/${editItem.id}`, "PATCH", payload)
+        toast.success("User berhasil diupdate")
+      } catch (error: any) {
+        toast.error(error.message || "Gagal mengupdate user")
         return
       }
-
-      toast.success("User berhasil diupdate")
     } else {
       if (!password.trim()) {
         toast.error("Password harus diisi")
         return
       }
 
-      const { data: existingUser } = await supabase
-        .from("mst_users")
-        .select("id")
-        .eq("username", username.trim())
-        .limit(1)
-
-      if (existingUser && existingUser.length > 0) {
-        toast.error("Username sudah digunakan")
-        return
-      }
-
-      const { data: newUser, error } = await supabase
-        .from("mst_users")
-        .insert({
+      try {
+        await apiMutate("/api/users", "POST", {
           username: username.trim(),
           password: password.trim(),
           role: role || "user",
         })
-        .select()
-        .single()
-
-      if (error || !newUser) {
-        toast.error("Gagal membuat user")
+        toast.success("User berhasil dibuat")
+      } catch (error: any) {
+        toast.error(error.message || "Gagal membuat user")
         return
       }
-
-      toast.success("User berhasil dibuat")
     }
 
     setOpen(false)
@@ -160,14 +142,13 @@ export default function UsersPage() {
   }
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase.from("mst_users").delete().eq("id", id)
-
-    if (error) {
-      toast.error("Gagal menghapus user")
-      return
+    try {
+      await apiMutate(`/api/users/${id}`, "DELETE")
+      toast.success("User berhasil dihapus")
+      fetchUsers()
+    } catch (error: any) {
+      toast.error(error.message || "Gagal menghapus user")
     }
-    toast.success("User berhasil dihapus")
-    fetchUsers()
   }
 
   const columns: ColumnDef<User>[] = [

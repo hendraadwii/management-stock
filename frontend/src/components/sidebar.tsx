@@ -9,10 +9,10 @@ import { LogOut, Menu, Warehouse, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { createClient } from "@/lib/supabase"
-import { Menu as MenuType } from "@/types"
+import { apiGet } from "@/lib/api"
+import { Menu as MenuType, RoleRecord } from "@/types"
 
 function SidebarContent({
   user,
@@ -23,18 +23,16 @@ function SidebarContent({
 }) {
   const pathname = usePathname()
   const [menus, setMenus] = useState<MenuType[]>([])
-  const supabase = useCallback(() => createClient(), [])
 
   useEffect(() => {
-    const client = supabase()
     const fetchMenus = async () => {
-      const { data: allMenus } = await client
-        .from("mst_menus")
-        .select("*")
-        .order("sort_order")
-        .order("name")
-
-      if (!allMenus) return
+      let allMenus: MenuType[] = []
+      try {
+        const res = await apiGet<{ data: MenuType[] }>("/api/menus")
+        allMenus = res.data || []
+      } catch {
+        allMenus = []
+      }
 
       if (!user?.role) {
         setMenus([])
@@ -46,24 +44,24 @@ function SidebarContent({
         return
       }
 
-      const { data: roleData } = await client
-        .from("mst_roles")
-        .select("name, access_menus")
-        .eq("name", user.role)
-        .maybeSingle()
+      let roleData: RoleRecord | undefined
+      try {
+        const res = await apiGet<{ data: RoleRecord[] }>("/api/roles")
+        roleData = res.data.find((r) => r.name === user.role)
+      } catch {}
 
       const allowedIdsArray = roleData?.access_menus || []
 
       if (allowedIdsArray.length > 0) {
         const allowedIds = new Set(allowedIdsArray)
-        
+
         const parentIdsToAdd = new Set<string>()
         allMenus.forEach((m) => {
           if (allowedIds.has(m.id) && m.parent_id) {
             parentIdsToAdd.add(m.parent_id)
           }
         })
-        
+
         const finalAllowedIds = new Set([...allowedIds, ...parentIdsToAdd])
         const filtered = allMenus.filter((m) => finalAllowedIds.has(m.id))
         setMenus(filtered)
@@ -72,7 +70,7 @@ function SidebarContent({
       }
     }
     fetchMenus()
-  }, [supabase, user])
+  }, [user])
 
   const topMenus = menus.filter((m) => !m.parent_id && m.url)
   const parentMenus = menus.filter((m) => !m.parent_id && !m.url)

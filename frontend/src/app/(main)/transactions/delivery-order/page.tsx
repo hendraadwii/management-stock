@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
-import { createClient } from "@/lib/supabase"
+import { useEffect, useState } from "react"
+import { apiGet, apiMutate } from "@/lib/api"
 import { useAuth } from "@/hooks/use-auth"
 import { Item, DeliveryOrder, DeliveryOrderDetail } from "@/types"
 import { Button } from "@/components/ui/button"
@@ -72,39 +72,15 @@ export default function DeliveryOrderPage() {
   const [formItems, setFormItems] = useState<DOFormItem[]>([])
   const [loading, setLoading] = useState(false)
   const { user } = useAuth()
-  const supabase = useMemo(() => createClient(), [])
 
   const fetchData = async () => {
-    const { data: itemsData } = await supabase
-      .from("mst_items")
-      .select("*")
-      .order("part_number")
-
-    const { data: doData } = await supabase
-      .from("delivery_orders")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(50)
-
-    const { data: detailsData } = await supabase
-      .from("delivery_order_details")
-      .select("*")
+    const [{ data: itemsData }, { data: doData }] = await Promise.all([
+      apiGet<{ data: Item[] }>("/api/items").catch(() => ({ data: null as any })),
+      apiGet<{ data: DeliveryOrder[] }>("/api/delivery-orders").catch(() => ({ data: null as any })),
+    ])
 
     if (itemsData) setItems(itemsData as unknown as Item[])
-    if (doData && detailsData && itemsData) {
-      const merged = doData.map((d: any) => ({
-        ...d,
-        delivery_order_details: (detailsData as any[])
-          .filter((det: any) => det.delivery_order_id === d.id)
-          .map((det: any) => ({
-            ...det,
-            items: itemsData.find((i: any) => i.id === det.item_id) ?? null,
-          })),
-      }))
-      setDoList(merged as unknown as DeliveryOrder[])
-    } else if (doData) {
-      setDoList(doData as unknown as DeliveryOrder[])
-    }
+    if (doData) setDoList(doData as unknown as DeliveryOrder[])
   }
 
   useEffect(() => {
@@ -168,27 +144,6 @@ export default function DeliveryOrderPage() {
     setFormItems(formItems.filter((f) => f.item_id !== itemId))
   }
 
-  const generateDONumber = async (): Promise<string> => {
-    const now = new Date()
-    const year = now.getFullYear()
-    const month = String(now.getMonth() + 1).padStart(2, "0")
-
-    const { data: lastDO } = await supabase
-      .from("delivery_orders")
-      .select("do_number")
-      .ilike("do_number", `ASTEK/${year}/${month}/%`)
-      .order("do_number", { ascending: false })
-      .limit(1)
-
-    let seq = 1
-    if (lastDO && lastDO.length > 0) {
-      const lastSeq = parseInt(lastDO[0].do_number.split("/")[3])
-      if (!isNaN(lastSeq)) seq = lastSeq + 1
-    }
-
-    return `ASTEK/${year}/${month}/${String(seq).padStart(4, "0")}`
-  }
-
   const openNewDialog = () => {
     setEditDo(null)
     setPoNumber("")
@@ -234,45 +189,14 @@ export default function DeliveryOrderPage() {
   const handleDelete = async () => {
     if (!selectedId) return
 
-    const doRecord = doList.find((d: any) => d.id === selectedId)
-    if (!doRecord) return
-
-    if ((doRecord as any).status === "submitted") {
-      const details = (doRecord as any).delivery_order_details || []
-      for (const d of details) {
-        const { data: itemData } = await supabase
-          .from("mst_items")
-          .select("current_stock")
-          .eq("id", d.item_id)
-          .single()
-
-        if (itemData) {
-          await supabase
-            .from("mst_items")
-            .update({ current_stock: itemData.current_stock + d.qty })
-            .eq("id", d.item_id)
-        }
-      }
+    try {
+      await apiMutate(`/api/delivery-orders/${selectedId}`, "DELETE")
+      toast.success("Delivery Order berhasil dihapus")
+      setSelectedId(null)
+      fetchData()
+    } catch (error: any) {
+      toast.error(error.message || "Gagal menghapus Delivery Order")
     }
-
-    await supabase
-      .from("delivery_order_details")
-      .delete()
-      .eq("delivery_order_id", selectedId)
-
-    const { error } = await supabase
-      .from("delivery_orders")
-      .delete()
-      .eq("id", selectedId)
-
-    if (error) {
-      toast.error("Gagal menghapus Delivery Order")
-      return
-    }
-
-    toast.success("Delivery Order berhasil dihapus")
-    setSelectedId(null)
-    fetchData()
   }
 
   const handleSubmitDO = async () => {
@@ -282,43 +206,16 @@ export default function DeliveryOrderPage() {
     if ((doRecord as any).status !== "draft") return
 
     setLoading(true)
-    const details = (doRecord as any).delivery_order_details || []
 
-    for (const d of details) {
-      const { data: itemData } = await supabase
-        .from("mst_items")
-        .select("current_stock")
-        .eq("id", d.item_id)
-        .single()
-
-      if (itemData) {
-        const newStock = itemData.current_stock - d.qty
-        if (newStock < 0) {
-          toast.error(`Stock ${d.items?.part_number || d.item_id} tidak mencukupi`)
-          setLoading(false)
-          return
-        }
-        await supabase
-          .from("mst_items")
-          .update({ current_stock: newStock })
-          .eq("id", d.item_id)
-      }
-    }
-
-    const { error } = await supabase
-      .from("delivery_orders")
-      .update({ status: "submitted" })
-      .eq("id", selectedId)
-
-    if (error) {
-      toast.error("Gagal submit Delivery Order")
+    try {
+      await apiMutate(`/api/delivery-orders/${selectedId}`, "POST")
+      toast.success(`Delivery Order ${(doRecord as any).do_number} berhasil disubmit`)
+    } catch (error: any) {
+      toast.error(error.message || "Gagal submit Delivery Order")
+    } finally {
       setLoading(false)
-      return
+      fetchData()
     }
-
-    toast.success(`Delivery Order ${(doRecord as any).do_number} berhasil disubmit`)
-    setLoading(false)
-    fetchData()
   }
 
   const openConfirmDialog = (action: "edit" | "submit" | "delete") => {
@@ -362,30 +259,15 @@ export default function DeliveryOrderPage() {
     const doRecord = doList.find((d) => d.id === selectedId)
     if (!doRecord) return
 
-    const { data: doRecord_ } = await supabase
-      .from("delivery_orders")
-      .select("*")
-      .eq("id", selectedId)
-      .single()
-
-    if (!doRecord_) return
-
-    const { data: detailRows } = await supabase
-      .from("delivery_order_details")
-      .select("*")
-      .eq("delivery_order_id", selectedId)
-
-    const { data: itemsData_ } = await supabase
-      .from("mst_items")
-      .select("*")
-
-    const doDetail: any = {
-      ...doRecord_,
-      delivery_order_details: (detailRows || []).map((det: any) => ({
-        ...det,
-        items: itemsData_?.find((i: any) => i.id === det.item_id) ?? null,
-      })),
+    let doDetail: any
+    try {
+      const { data } = await apiGet<{ data: any[] }>("/api/delivery-orders")
+      doDetail = data.find((d) => d.id === selectedId)
+    } catch {
+      doDetail = null
     }
+
+    if (!doDetail) return
 
     const details = doDetail.delivery_order_details || []
 
@@ -554,26 +436,19 @@ export default function DeliveryOrderPage() {
     const doRecord = doList.find((d) => d.id === selectedId)
     if (!doRecord) return
 
-    const { data: doRecord_ } = await supabase
-      .from("delivery_orders")
-      .select("*")
-      .eq("id", selectedId)
-      .single()
+    let doDetail: any
+    try {
+      const { data } = await apiGet<{ data: any[] }>("/api/delivery-orders")
+      doDetail = data.find((d) => d.id === selectedId)
+    } catch {
+      doDetail = null
+    }
 
-    if (!doRecord_) return
+    if (!doDetail) return
 
-    const { data: detailRows } = await supabase
-      .from("delivery_order_details")
-      .select("*")
-      .eq("delivery_order_id", selectedId)
-
-    const { data: itemsData_ } = await supabase
-      .from("mst_items")
-      .select("*")
-
-    const details = (detailRows || []).map((det: any) => ({
+    const details = (doDetail.delivery_order_details || []).map((det: any) => ({
       ...det,
-      items: itemsData_?.find((i: any) => i.id === det.item_id) ?? null,
+      items: det.items ?? null,
     }))
 
     const doc = new jsPDF("portrait", "mm", "a4")
@@ -695,67 +570,36 @@ export default function DeliveryOrderPage() {
 
     setLoading(true)
 
+    const itemsPayload = formItems.map((f) => ({ item_id: f.item_id, qty: f.qty }))
+
     if (editDo) {
-      await supabase
-        .from("delivery_order_details")
-        .delete()
-        .eq("delivery_order_id", editDo.id)
-
-      for (const item of formItems) {
-        await supabase.from("delivery_order_details").insert({
-          delivery_order_id: editDo.id,
-          item_id: item.item_id,
-          qty: item.qty,
-        })
-      }
-
-      const { error: updateError } = await supabase
-        .from("delivery_orders")
-        .update({
+      try {
+        await apiMutate(`/api/delivery-orders/${editDo.id}`, "PATCH", {
           po_number: poNumber.trim(),
           shipping: shipping.trim(),
           customer_desc: customerDesc.trim() || null,
+          items: itemsPayload,
         })
-        .eq("id", editDo.id)
-
-      if (updateError) {
-        toast.error("Gagal mengupdate Delivery Order")
+        toast.success(`Delivery Order ${editDo.do_number} berhasil diupdate`)
+      } catch (error: any) {
+        toast.error(error.message || "Gagal mengupdate Delivery Order")
         setLoading(false)
         return
       }
-
-      toast.success(`Delivery Order ${editDo.do_number} berhasil diupdate`)
     } else {
-      const doNumber = await generateDONumber()
-
-      const { data: doRecord, error: doError } = await supabase
-        .from("delivery_orders")
-        .insert({
-          do_number: doNumber,
+      try {
+        const res = await apiMutate<{ do_number: string }>("/api/delivery-orders", "POST", {
           po_number: poNumber.trim(),
           shipping: shipping.trim(),
           customer_desc: customerDesc.trim() || null,
-          status: "draft",
-          created_by: user?.id,
+          items: itemsPayload,
         })
-        .select()
-        .single()
-
-      if (doError || !doRecord) {
-        toast.error("Gagal membuat Delivery Order")
+        toast.success(`Delivery Order ${res.do_number} berhasil dibuat (draft)`)
+      } catch (error: any) {
+        toast.error(error.message || "Gagal membuat Delivery Order")
         setLoading(false)
         return
       }
-
-      for (const item of formItems) {
-        await supabase.from("delivery_order_details").insert({
-          delivery_order_id: doRecord.id,
-          item_id: item.item_id,
-          qty: item.qty,
-        })
-      }
-
-      toast.success(`Delivery Order ${doNumber} berhasil dibuat (draft)`)
     }
 
     setDialogOpen(false)
@@ -834,19 +678,23 @@ export default function DeliveryOrderPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button onClick={openNewDialog}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Data
-          </Button>
-          <Button
-            variant="outline"
-            disabled={!selectedId || isSubmitted}
-            onClick={() => openConfirmDialog("edit")}
-          >
-            <Pencil className="mr-2 h-4 w-4" />
-            Edit Data
-          </Button>
-          {!isSubmitted && (
+          {user?.role !== "user" && (
+            <Button onClick={openNewDialog}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Data
+            </Button>
+          )}
+          {user?.role !== "user" && (
+            <Button
+              variant="outline"
+              disabled={!selectedId || isSubmitted}
+              onClick={() => openConfirmDialog("edit")}
+            >
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit Data
+            </Button>
+          )}
+          {user?.role !== "user" && !isSubmitted && (
             <Button
               variant="default"
               disabled={!selectedId}
@@ -856,14 +704,16 @@ export default function DeliveryOrderPage() {
               Submit
             </Button>
           )}
-          <Button
-            variant="destructive"
-            disabled={!selectedId}
-            onClick={() => openConfirmDialog("delete")}
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete Data
-          </Button>
+          {user?.role !== "user" && (
+            <Button
+              variant="destructive"
+              disabled={!selectedId}
+              onClick={() => openConfirmDialog("delete")}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete Data
+            </Button>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger
               render={

@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
-import { createClient } from "@/lib/supabase"
+import { useEffect, useState } from "react"
+import { apiGet, apiMutate } from "@/lib/api"
 import { RoleRecord as Role, Menu } from "@/types"
 import { DataTable } from "@/components/data-table"
 import { ColumnDef } from "@tanstack/react-table"
@@ -33,7 +33,6 @@ export default function RolesPage() {
   const [editItem, setEditItem] = useState<Role | null>(null)
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
-  const supabase = useMemo(() => createClient(), [])
 
   // State untuk Hak Akses Menu
   const [accessDialogOpen, setAccessDialogOpen] = useState(false)
@@ -45,28 +44,20 @@ export default function RolesPage() {
   const handleOpenAccess = async (role: Role) => {
     setSelectedRole(role)
     setAccessDialogOpen(true)
-    
-    // Ambil semua menu
-    const { data: allMenus } = await supabase
-      .from("mst_menus")
-      .select("*")
-      .order("sort_order")
-      .order("name")
-      
-    if (allMenus) setMenus(allMenus)
 
-    // Ambil hak akses menu saat ini dari kolom access_menus pada role tersebut
-    const { data: currentRole } = await supabase
-      .from("mst_roles")
-      .select("access_menus")
-      .eq("id", role.id)
-      .maybeSingle()
-      
-    if (currentRole?.access_menus) {
-      setSelectedMenuIds(currentRole.access_menus)
-    } else {
-      setSelectedMenuIds([])
-    }
+    try {
+      const [menusRes, roleRes] = await Promise.all([
+        apiGet<{ data: Menu[] }>("/api/menus"),
+        apiGet<{ data: Role[] }>(`/api/roles`),
+      ])
+
+      if (menusRes.data) setMenus(menusRes.data)
+
+      const currentRole = roleRes.data.find((r) => r.id === role.id)
+      setSelectedMenuIds(
+        Array.isArray(currentRole?.access_menus) ? currentRole!.access_menus! : []
+      )
+    } catch {}
   }
 
   const handleToggleMenu = (menuId: string, checked: boolean) => {
@@ -81,29 +72,26 @@ export default function RolesPage() {
     if (!selectedRole) return
     setSavingAccess(true)
 
-    // Simpan array menuId langsung ke kolom access_menus pada tabel roles
-    const { error } = await supabase
-      .from("mst_roles")
-      .update({
+    try {
+      await apiMutate(`/api/roles/${selectedRole.id}`, "PATCH", {
         access_menus: selectedMenuIds,
       })
-      .eq("id", selectedRole.id)
-
-    if (error) {
-      toast.error("Gagal memperbarui hak akses")
+      toast.success("Hak akses berhasil diperbarui")
+      setAccessDialogOpen(false)
+    } catch (error: any) {
+      toast.error(error.message || "Gagal memperbarui hak akses")
+    } finally {
       setSavingAccess(false)
-      return
     }
-
-    toast.success("Hak akses berhasil diperbarui")
-    setAccessDialogOpen(false)
-    setSavingAccess(false)
   }
 
   const fetchRoles = async () => {
-    const { data } = await supabase.from("mst_roles").select("*").order("name")
-    if (data) setRoles(data)
-    setLoading(false)
+    try {
+      const { data } = await apiGet<{ data: Role[] }>("/api/roles")
+      setRoles(data)
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -118,30 +106,27 @@ export default function RolesPage() {
     }
 
     if (editItem) {
-      const { error } = await supabase
-        .from("mst_roles")
-        .update({
+      try {
+        await apiMutate(`/api/roles/${editItem.id}`, "PATCH", {
           name: name.trim(),
           description: description.trim() || null,
         })
-        .eq("id", editItem.id)
-
-      if (error) {
-        toast.error("Gagal mengupdate role")
+        toast.success("Role berhasil diupdate")
+      } catch (error: any) {
+        toast.error(error.message || "Gagal mengupdate role")
         return
       }
-      toast.success("Role berhasil diupdate")
     } else {
-      const { error } = await supabase.from("mst_roles").insert({
-        name: name.trim(),
-        description: description.trim() || null,
-      })
-
-      if (error) {
-        toast.error("Gagal menambah role")
+      try {
+        await apiMutate("/api/roles", "POST", {
+          name: name.trim(),
+          description: description.trim() || null,
+        })
+        toast.success("Role berhasil ditambah")
+      } catch (error: any) {
+        toast.error(error.message || "Gagal menambah role")
         return
       }
-      toast.success("Role berhasil ditambah")
     }
 
     setOpen(false)
@@ -175,14 +160,13 @@ export default function RolesPage() {
   }
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase.from("mst_roles").delete().eq("id", id)
-
-    if (error) {
-      toast.error("Gagal menghapus role")
-      return
+    try {
+      await apiMutate(`/api/roles/${id}`, "DELETE")
+      toast.success("Role berhasil dihapus")
+      fetchRoles()
+    } catch (error: any) {
+      toast.error(error.message || "Gagal menghapus role")
     }
-    toast.success("Role berhasil dihapus")
-    fetchRoles()
   }
 
   const columns: ColumnDef<Role>[] = [

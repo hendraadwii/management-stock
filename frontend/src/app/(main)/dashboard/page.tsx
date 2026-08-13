@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
-import { createClient } from "@/lib/supabase"
+import { useEffect, useState } from "react"
+import { apiGet } from "@/lib/api"
 import { Item } from "@/types"
 import {
   Card,
@@ -66,160 +66,33 @@ export default function DashboardPage() {
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([])
   const [monthlyMovements, setMonthlyMovements] = useState<MonthlyMovement[]>([])
   const [recentDOs, setRecentDOs] = useState<RecentDO[]>([])
-  const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
     const fetchData = async () => {
-      // Fetch all items
-      const { data: itemsData } = await supabase
-        .from("mst_items")
-        .select("*")
-        .order("part_number")
+      try {
+        const { data } = await apiGet<{
+          data: {
+            totalItems: number
+            totalStock: number
+            totalDO: number
+            lowStockCount: number
+            topCategories: CategoryStock[]
+            lowStockItems: LowStockItem[]
+            monthlyMovements: MonthlyMovement[]
+            recentDOs: RecentDO[]
+          }
+        }>("/api/dashboard")
 
-      if (itemsData) {
-        setTotalItems(itemsData.length)
-
-        const totalStockValue = itemsData.reduce(
-          (acc: number, item: any) => acc + (item.current_stock ?? 0),
-          0
-        )
-        setTotalStock(totalStockValue)
-
-        // Top 5 categories by stock
-        const categoryMap = new Map<string, number>()
-        itemsData.forEach((item: any) => {
-          const category = item.category || "Uncategorized"
-          categoryMap.set(
-            category,
-            (categoryMap.get(category) ?? 0) + (item.current_stock ?? 0)
-          )
-        })
-        const sortedCategories = Array.from(categoryMap.entries())
-          .map(([category, total_stock]) => ({ category, total_stock }))
-          .sort((a, b) => b.total_stock - a.total_stock)
-          .slice(0, 5)
-        setTopCategories(sortedCategories)
-
-        // Low stock items (current_stock < minimal_qty)
-        const lowStock = itemsData.filter(
-          (item: any) =>
-            item.minimal_qty != null &&
-            item.minimal_qty > 0 &&
-            (item.current_stock ?? 0) < item.minimal_qty
-        )
-        setLowStockItems(lowStock)
-        setLowStockCount(lowStock.length)
-      }
-
-      // DO bulan ini
-      const now = new Date()
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-        .toISOString()
-        .split("T")[0]
-
-      const { count: doCount } = await supabase
-        .from("delivery_orders")
-        .select("*", { count: "exact", head: true })
-        .gte("created_at", startOfMonth)
-
-      setTotalDO(doCount ?? 0)
-
-      // Monthly movements (last 6 months)
-      const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1)
-        .toISOString()
-
-      const { data: stockIns } = await supabase
-        .from("trx_stock")
-        .select("qty, created_at")
-        .gte("created_at", sixMonthsAgo)
-
-      const { data: recentDOsForMovement } = await supabase
-        .from("delivery_orders")
-        .select("id, created_at")
-        .gte("created_at", sixMonthsAgo)
-
-      const doIds = recentDOsForMovement?.map((order: any) => order.id) || []
-      const { data: doDetails } = await supabase
-        .from("delivery_order_details")
-        .select("qty, delivery_order_id")
-        .in("delivery_order_id", doIds)
-
-      const monthMap = new Map<string, { stock_in: number; delivery: number }>()
-
-      // Initialize last 6 months
-      for (let i = 5; i >= 0; i--) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-        const key = d.toLocaleDateString("id-ID", {
-          year: "numeric",
-          month: "short",
-        })
-        monthMap.set(key, { stock_in: 0, delivery: 0 })
-      }
-
-      stockIns?.forEach((r: any) => {
-        const d = new Date(r.created_at)
-        const key = d.toLocaleDateString("id-ID", {
-          year: "numeric",
-          month: "short",
-        })
-        const entry = monthMap.get(key)
-        if (entry) entry.stock_in += r.qty ?? 0
-      })
-
-      // Map DO dates to details
-      const doDateMap = new Map(recentDOsForMovement?.map((order: any) => [order.id, order.created_at]) || [])
-
-      doDetails?.forEach((r: any) => {
-        const createdAt = doDateMap.get(r.delivery_order_id)
-        if (!createdAt) return
-        const d = new Date(createdAt)
-        const key = d.toLocaleDateString("id-ID", {
-          year: "numeric",
-          month: "short",
-        })
-        const entry = monthMap.get(key)
-        if (entry) entry.delivery += r.qty ?? 0
-      })
-
-      setMonthlyMovements(
-        Array.from(monthMap.entries()).map(([month, data]) => ({
-          month,
-          ...data,
-        }))
-      )
-
-      // Recent 5 DOs
-      const { data: recentDOData } = await supabase
-        .from("delivery_orders")
-        .select("id, do_number, po_number, shipping, created_at")
-        .order("created_at", { ascending: false })
-        .limit(5)
-
-      if (recentDOData) {
-        const doIds = recentDOData.map((d: any) => d.id)
-        const { data: detailsData } = await supabase
-          .from("delivery_order_details")
-          .select("delivery_order_id, qty")
-          .in("delivery_order_id", doIds)
-
-        const qtyMap = new Map<string, number>()
-        detailsData?.forEach((d: any) => {
-          qtyMap.set(
-            d.delivery_order_id,
-            (qtyMap.get(d.delivery_order_id) ?? 0) + d.qty
-          )
-        })
-
-        setRecentDOs(
-          recentDOData.map((d: any) => ({
-            id: d.id,
-            do_number: d.do_number,
-            po_number: d.po_number,
-            shipping: d.shipping,
-            created_at: d.created_at,
-            total_qty: qtyMap.get(d.id) ?? 0,
-          }))
-        )
+        setTotalItems(data.totalItems)
+        setTotalStock(data.totalStock)
+        setTotalDO(data.totalDO)
+        setLowStockCount(data.lowStockCount)
+        setTopCategories(data.topCategories)
+        setLowStockItems(data.lowStockItems)
+        setMonthlyMovements(data.monthlyMovements)
+        setRecentDOs(data.recentDOs)
+      } catch (error) {
+        console.error("Gagal mengambil data dashboard:", error)
       }
     }
 
