@@ -171,7 +171,9 @@ export default function StockInPage() {
     const all = Array.from(map.values()).sort((a, b) =>
       a.item.part_number.localeCompare(b.item.part_number)
     )
-    return lowStockOnly ? all.filter((g) => g.item.current_stock < 200) : all
+    return lowStockOnly
+      ? all.filter((g) => (g.item as any).standar_qty != null && g.item.current_stock < Number((g.item as any).standar_qty))
+      : all
   }, [items, records, lowStockOnly])
 
   const selectedItemRecords = useMemo(() => {

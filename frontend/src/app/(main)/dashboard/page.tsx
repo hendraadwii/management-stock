@@ -33,6 +33,7 @@ interface LowStockItem {
   part_number: string
   category: string | null
   current_stock: number
+  standar_qty: number | null
   uom: string | null
 }
 
@@ -240,7 +241,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             {lowStockItems.length > 0 ? (
-              <div className="space-y-3">
+              <div className="max-h-[340px] overflow-y-auto space-y-3 pr-1">
                 {lowStockItems.map((item) => (
                   <div
                     key={item.id}
@@ -257,7 +258,7 @@ export default function DashboardPage() {
                         {item.current_stock}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        min: 200
+                        min: {item.standar_qty}
                       </p>
                     </div>
                   </div>

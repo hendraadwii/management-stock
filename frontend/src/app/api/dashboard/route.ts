@@ -13,8 +13,21 @@ export async function GET() {
     const totalItems = itemRows.length
     const totalStock = itemRows.reduce((acc, i) => acc + (i.current_stock ?? 0), 0)
 
+    const [stockTxItems, doItems] = await Promise.all([
+      db.select({ item_id: stockTransactions.item_id }).from(stockTransactions),
+      db.select({ item_id: deliveryOrderDetails.item_id }).from(deliveryOrderDetails),
+    ])
+
+    const itemsWithTransactions = new Set<string>()
+    stockTxItems.forEach((r) => itemsWithTransactions.add(r.item_id))
+    doItems.forEach((r) => itemsWithTransactions.add(r.item_id))
+
     const lowStockItems = itemRows.filter(
-      (i) => (i.current_stock ?? 0) < 200
+      (i) =>
+        itemsWithTransactions.has(i.id) &&
+        i.standar_qty != null &&
+        Number(i.standar_qty) > 0 &&
+        (i.current_stock ?? 0) < Number(i.standar_qty)
     )
 
     const categoryMap = new Map<string, number>()
