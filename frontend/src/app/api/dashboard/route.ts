@@ -14,7 +14,7 @@ export async function GET() {
     const totalStock = itemRows.reduce((acc, i) => acc + (i.current_stock ?? 0), 0)
 
     const lowStockItems = itemRows.filter(
-      (i) => i.minimal_qty != null && i.minimal_qty > 0 && (i.current_stock ?? 0) < i.minimal_qty!
+      (i) => (i.current_stock ?? 0) < 200
     )
 
     const categoryMap = new Map<string, number>()

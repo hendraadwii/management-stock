@@ -33,7 +33,6 @@ interface LowStockItem {
   part_number: string
   category: string | null
   current_stock: number
-  minimal_qty: number
   uom: string | null
 }
 
@@ -258,7 +257,7 @@ export default function DashboardPage() {
                         {item.current_stock}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        min: {item.minimal_qty}
+                        min: 200
                       </p>
                     </div>
                   </div>
