@@ -25,8 +25,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Role-based access control
-  if (user.role === "user" && !pathname.startsWith("/transactions") && pathname !== "/") {
+  // Role-based access control (skip for API routes)
+  if (user.role === "user" && !pathname.startsWith("/api/") && !pathname.startsWith("/transactions") && pathname !== "/") {
     const url = request.nextUrl.clone()
     url.pathname = "/transactions/stock"
     return NextResponse.redirect(url)
